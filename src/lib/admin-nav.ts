@@ -3,7 +3,7 @@ import {
   Boxes,
   CalendarDays,
   CreditCard,
-  LayoutDashboard,
+  Gauge,
   Scissors,
   Settings,
   Wallet,
@@ -19,7 +19,7 @@ export interface AdminNavItem {
 
 // Menu lateral do admin. `ready` marca o que ja existe; o resto entra nas proximas fases.
 export const ADMIN_NAV: AdminNavItem[] = [
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard, ready: true },
+  { label: "Dashboard", href: "/admin", icon: Gauge, ready: true },
   { label: "Agenda", href: "/admin/agenda", icon: CalendarDays },
   { label: "Financeiro", href: "/admin/financeiro", icon: Wallet },
   { label: "Barbeiros", href: "/admin/barbeiros", icon: Scissors },
