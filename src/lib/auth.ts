@@ -1,0 +1,23 @@
+import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { profiles, type Profile } from "@/db/schema";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+/**
+ * Retorna o profile do usuário autenticado. Redireciona para /login se não houver
+ * sessão válida ou se o profile não existir. Use em Server Components/Layouts.
+ */
+export async function getCurrentProfile(): Promise<Profile> {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const [profile] = await db.select().from(profiles).where(eq(profiles.id, user.id));
+  if (!profile) redirect("/login");
+
+  return profile;
+}

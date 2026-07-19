@@ -9,7 +9,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Paleta primária: azul escuro (navy) — identidade do sistema
+        // Paleta primaria: azul escuro (navy), identidade do sistema
         navy: {
           50: "#eef3fb",
           100: "#d5e0f4",
