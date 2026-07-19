@@ -1,0 +1,59 @@
+"use client";
+
+import { useState } from "react";
+import { cn } from "@/lib/cn";
+import { LoginForm } from "./login-form";
+import { RegisterForm } from "./register-form";
+
+type Tab = "login" | "cadastro";
+
+export function AuthPanel({
+  defaultTab = "login",
+  nomeBarbearia,
+}: {
+  defaultTab?: Tab;
+  nomeBarbearia: string;
+}) {
+  const [tab, setTab] = useState<Tab>(defaultTab);
+
+  return (
+    <div className="w-full">
+      {/* Marca no mobile (hero fica escondido) */}
+      <div className="mb-8 flex flex-col items-center text-center lg:hidden">
+        <span className="text-[32px] font-extrabold leading-none tracking-tight text-white">
+          {nomeBarbearia}
+        </span>
+        <span className="mt-1.5 text-[11px] font-semibold uppercase tracking-wider text-brand-light">
+          Sistema de Agendamento
+        </span>
+      </div>
+
+      <h2 className="text-center text-[28px] font-extrabold tracking-tight lg:text-left">
+        Bem-vindo
+      </h2>
+      <p className="mt-1.5 text-center text-sm text-muted lg:text-left">
+        Acesse sua conta ou crie uma nova.
+      </p>
+
+      <div className="mt-7 grid grid-cols-2 gap-1 rounded-xl border border-line bg-surface p-1">
+        {(["login", "cadastro"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTab(value)}
+            className={cn(
+              "rounded-lg py-2.5 text-[13px] font-semibold transition",
+              tab === value
+                ? "bg-brand text-white shadow-brand"
+                : "text-muted hover:text-ink",
+            )}
+          >
+            {value === "login" ? "Entrar" : "Cadastrar"}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-7">{tab === "login" ? <LoginForm /> : <RegisterForm />}</div>
+    </div>
+  );
+}

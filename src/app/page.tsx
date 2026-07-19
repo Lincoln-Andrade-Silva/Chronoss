@@ -1,27 +1,32 @@
-export default function Home() {
+import { redirect } from "next/navigation";
+import { Card } from "@/components/ui";
+import { getCurrentProfile } from "@/lib/auth";
+import { getBarbeariaNome } from "@/lib/barbearia";
+import { LogoutButton } from "@/features/auth/logout-button";
+
+export const dynamic = "force-dynamic";
+
+export default async function ClientHome() {
+  const profile = await getCurrentProfile();
+  if (profile.tipo === "admin") redirect("/admin");
+
+  const nomeBarbearia = await getBarbeariaNome();
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-6 py-16">
-      <div className="w-full max-w-md rounded-2xl border border-navy-800 bg-navy-900/60 p-8 shadow-2xl">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-navy-500 text-lg font-bold">
-            CB
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Cronos Barber</h1>
-            <p className="text-sm text-navy-300">Sistema de gestão para barbearia</p>
-          </div>
-        </div>
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8">
+      <header className="mb-8 flex items-center justify-between gap-4">
+        <span className="text-lg font-extrabold tracking-tight text-white">
+          {nomeBarbearia}
+        </span>
+        <LogoutButton fullWidth={false} />
+      </header>
 
-        <p className="text-sm leading-relaxed text-navy-200">
-          Fase 0 concluída — projeto Next.js, TailwindCSS e Drizzle conectados ao
-          Supabase. As telas do sistema entram nas próximas fases.
+      <Card>
+        <h1 className="text-xl font-bold">Olá, {profile.nome}</h1>
+        <p className="mt-1 text-sm text-muted">
+          Bem-vindo. Em breve você poderá agendar seus horários por aqui.
         </p>
-
-        <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-navy-800 px-3 py-1 text-xs text-navy-200">
-          <span className="h-2 w-2 rounded-full bg-emerald-400" />
-          Setup ativo
-        </div>
-      </div>
+      </Card>
     </main>
   );
 }
