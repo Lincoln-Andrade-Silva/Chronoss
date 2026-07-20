@@ -90,13 +90,14 @@ export default async function ClientHome() {
           <p className="text-sm font-semibold">Agendar horário</p>
           <span className="text-xs text-muted">Escolha serviço, profissional e horário</span>
         </Link>
-        <div className="flex flex-col items-start gap-2 rounded-xl border border-line bg-panel p-4 opacity-70">
+        <Link
+          href="/meus-agendamentos"
+          className="flex flex-col items-start gap-2 rounded-xl border border-line bg-panel p-4 transition hover:border-brand/40 hover:bg-surface"
+        >
           <History className="h-5 w-5 text-brand-light" />
           <p className="text-sm font-semibold">Meus agendamentos</p>
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted2">
-            em breve
-          </span>
-        </div>
+          <span className="text-xs text-muted">Veja e gerencie seus horários</span>
+        </Link>
       </div>
 
       {/* Info da barbearia */}
