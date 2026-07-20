@@ -85,6 +85,34 @@
       "when": 1784513979440,
       "tag": "0011_agendamentos_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1784549662103,
+      "tag": "0012_yellow_wolverine",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784549681618,
+      "tag": "0013_planos_assinaturas_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1784549977752,
+      "tag": "0014_cuddly_whiplash",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1784550123534,
+      "tag": "0015_shallow_tony_stark",
+      "breakpoints": true
     }
   ]
 }

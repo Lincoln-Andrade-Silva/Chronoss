@@ -30,7 +30,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
       { label: "Agenda", href: "/admin/agenda", icon: CalendarDays, ready: true },
       { label: "Cadastros", href: "/admin/cadastros", icon: Boxes, ready: true },
       { label: "Vendas", href: "/admin/vendas", icon: ShoppingCart },
-      { label: "Assinaturas", href: "/admin/assinaturas", icon: CreditCard },
+      { label: "Assinaturas", href: "/admin/assinaturas", icon: CreditCard, ready: true },
       { label: "Relatórios", href: "/admin/relatorios", icon: BarChart3 },
     ],
   },

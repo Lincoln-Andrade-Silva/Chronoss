@@ -5,6 +5,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -125,3 +126,37 @@ export const expediente = pgTable("expediente", {
 });
 
 export type Expediente = typeof expediente.$inferSelect;
+
+export const planos = pgTable("planos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull(),
+  valor: numeric("valor", { precision: 10, scale: 2 }).notNull().default("0"),
+  diasValidade: integer("dias_validade").notNull().default(30),
+  ativo: boolean("ativo").notNull().default(true),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Plano = typeof planos.$inferSelect;
+
+// N:N entre planos e serviços inclusos (cobertos pela assinatura).
+export const planoServicos = pgTable(
+  "plano_servicos",
+  {
+    planoId: uuid("plano_id").notNull(),
+    servicoId: uuid("servico_id").notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.planoId, t.servicoId] }) }),
+);
+
+export const statusAssinatura = pgEnum("status_assinatura", ["ativo", "inativo"]);
+
+export const assinaturas = pgTable("assinaturas", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clienteId: uuid("cliente_id").notNull(),
+  planoId: uuid("plano_id").notNull(),
+  dataInicio: timestamp("data_inicio", { withTimezone: true }).notNull().defaultNow(),
+  status: statusAssinatura("status").notNull().default("ativo"),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Assinatura = typeof assinaturas.$inferSelect;
