@@ -33,48 +33,54 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
-    <nav className="flex-1 space-y-1 px-3 py-4">
-      <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-muted2">
-        Menu
-      </p>
-      {ADMIN_NAV.map((item) => {
-        const Icon = item.icon;
-        const active =
-          item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+    <nav className="flex-1 space-y-5 px-3 py-4">
+      {ADMIN_NAV.map((section) => (
+        <div key={section.label} className="space-y-1">
+          <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted2">
+            {section.label}
+          </p>
+          {section.items.map((item) => {
+            const Icon = item.icon;
+            const active =
+              item.href === "/admin"
+                ? pathname === "/admin"
+                : pathname.startsWith(item.href);
 
-        if (!item.ready) {
-          return (
-            <div
-              key={item.label}
-              title="Em breve"
-              className="flex cursor-not-allowed items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[13px] text-muted2"
-            >
-              <Icon className="h-4 w-4" strokeWidth={1.8} />
-              <span>{item.label}</span>
-              <span className="ml-auto text-[10px] font-medium uppercase tracking-wider text-muted2">
-                em breve
-              </span>
-            </div>
-          );
-        }
+            if (!item.ready) {
+              return (
+                <div
+                  key={item.label}
+                  title="Em breve"
+                  className="flex cursor-not-allowed items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[13px] text-muted2"
+                >
+                  <Icon className="h-4 w-4" strokeWidth={1.8} />
+                  <span>{item.label}</span>
+                  <span className="ml-auto text-[10px] font-medium uppercase tracking-wider text-muted2">
+                    em breve
+                  </span>
+                </div>
+              );
+            }
 
-        return (
-          <Link
-            key={item.label}
-            href={item.href}
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[13px] transition",
-              active
-                ? "bg-brand/[0.12] font-semibold text-brand-light"
-                : "font-medium text-muted hover:bg-surface hover:text-ink",
-            )}
-          >
-            <Icon className="h-4 w-4" strokeWidth={1.8} />
-            <span>{item.label}</span>
-          </Link>
-        );
-      })}
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={onNavigate}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[13px] transition",
+                  active
+                    ? "bg-brand/[0.12] font-semibold text-brand-light"
+                    : "font-medium text-muted hover:bg-surface hover:text-ink",
+                )}
+              >
+                <Icon className="h-4 w-4" strokeWidth={1.8} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 }
