@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Pencil, Plus, Power, PowerOff, Trash2 } from "lucide-react";
-import { Badge, Button, ConfirmModal, DataTable } from "@/components/ui";
+import { Badge, Button, ConfirmModal, DataTable, Select } from "@/components/ui";
 import type { Barbeiro } from "@/db/schema";
 import { cn } from "@/lib/cn";
 import { alternarAtivoBarbeiro, excluirBarbeiro } from "./actions";
@@ -112,28 +112,24 @@ export function BarbeirosClient({ barbeiros }: { barbeiros: Barbeiro[] }) {
     },
   ];
 
-  const toolbar = (
-    <>
-      <div className="flex rounded-lg border border-line p-1">
-        {(["todos", "ativos", "inativos"] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setStatus(s)}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-medium capitalize transition",
-              status === s ? "bg-brand text-white" : "text-muted hover:text-ink",
-            )}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-      <Button size="sm" onClick={() => setModal({ barbeiro: null })}>
-        <Plus className="h-4 w-4" />
-        Adicionar
-      </Button>
-    </>
+  const filtro = (
+    <Select
+      value={status}
+      onChange={(v) => setStatus(v as StatusFiltro)}
+      className="w-36 sm:w-44"
+      options={[
+        { value: "todos", label: "Todos" },
+        { value: "ativos", label: "Ativos" },
+        { value: "inativos", label: "Inativos" },
+      ]}
+    />
+  );
+
+  const acoes = (
+    <Button className="h-11 w-full sm:w-auto" onClick={() => setModal({ barbeiro: null })}>
+      <Plus className="h-4 w-4" />
+      Adicionar
+    </Button>
   );
 
   return (
@@ -142,7 +138,8 @@ export function BarbeirosClient({ barbeiros }: { barbeiros: Barbeiro[] }) {
         columns={columns}
         data={dados}
         searchPlaceholder="Buscar por nome..."
-        toolbar={toolbar}
+        filter={filtro}
+        actions={acoes}
         emptyMessage="Nenhum barbeiro cadastrado."
       />
 

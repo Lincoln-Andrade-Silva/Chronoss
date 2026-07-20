@@ -68,3 +68,27 @@ export const barbeiros = pgTable("barbeiros", {
 
 export type Barbeiro = typeof barbeiros.$inferSelect;
 export type NovoBarbeiro = typeof barbeiros.$inferInsert;
+
+export const servicos = pgTable("servicos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull(),
+  descricao: text("descricao"),
+  preco: numeric("preco", { precision: 10, scale: 2 }).notNull().default("0"),
+  duracaoMinutos: integer("duracao_minutos").notNull().default(30),
+  ativo: boolean("ativo").notNull().default(true),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Servico = typeof servicos.$inferSelect;
+
+export const statusProduto = pgEnum("status_produto", ["ativo", "inativo"]);
+
+export const produtos = pgTable("produtos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull(),
+  valor: numeric("valor", { precision: 10, scale: 2 }).notNull().default("0"),
+  status: statusProduto("status").notNull().default("ativo"),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Produto = typeof produtos.$inferSelect;

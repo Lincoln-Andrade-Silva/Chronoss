@@ -16,7 +16,10 @@ interface DataTableProps<T> {
   columns: ColumnDef<T>[];
   data: T[];
   searchPlaceholder?: string;
-  toolbar?: React.ReactNode;
+  /** Filtro exibido ao lado da busca. */
+  filter?: React.ReactNode;
+  /** Ações (ex: botão adicionar). No mobile ocupam a linha inteira. */
+  actions?: React.ReactNode;
   emptyMessage?: string;
   pageSize?: number;
 }
@@ -25,7 +28,8 @@ export function DataTable<T>({
   columns,
   data,
   searchPlaceholder = "Buscar...",
-  toolbar,
+  filter,
+  actions,
   emptyMessage = "Nenhum registro encontrado.",
   pageSize = 10,
 }: DataTableProps<T>) {
@@ -45,18 +49,21 @@ export function DataTable<T>({
   const rows = table.getRowModel().rows;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 sm:space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative sm:max-w-xs sm:flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted2" />
-          <Input
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder={searchPlaceholder}
-            className="pl-10"
-          />
+        <div className="flex items-center gap-2 sm:flex-1">
+          <div className="relative flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted2" />
+            <Input
+              value={globalFilter}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="h-11 pl-10"
+            />
+          </div>
+          {filter}
         </div>
-        {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
+        {actions && <div className="sm:shrink-0">{actions}</div>}
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-line">
