@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
-import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { db } from "@/db";
 import { barbeariaInfo, type HorarioDia } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
+import { uploadImagem } from "@/lib/storage";
 
 export interface BarbeariaFormState {
   ok?: boolean;
@@ -50,26 +50,6 @@ function parseHorario(raw: FormDataEntryValue | null): HorarioDia[] | null {
   }
 }
 
-async function uploadLogo(file: File): Promise<string> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) throw new Error("Storage não configurado.");
-
-  const supabase = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const ext = file.name.split(".").pop()?.toLowerCase() || "png";
-  const path = `logo/logo-${Date.now()}.${ext}`;
-
-  const { error } = await supabase.storage
-    .from("barbearia")
-    .upload(path, file, { upsert: true, contentType: file.type });
-  if (error) throw error;
-
-  return supabase.storage.from("barbearia").getPublicUrl(path).data.publicUrl;
-}
-
 export async function salvarBarbearia(
   _prev: BarbeariaFormState,
   formData: FormData,
@@ -98,7 +78,7 @@ export async function salvarBarbearia(
 
   try {
     if (logo instanceof File && logo.size > 0) {
-      logoUrl = await uploadLogo(logo);
+      logoUrl = await uploadImagem(logo, "logo");
     }
 
     await db

@@ -1,4 +1,14 @@
-import { integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  jsonb,
+  numeric,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 export const tipoUsuario = pgEnum("tipo_usuario", ["admin", "cliente"]);
 export const statusUsuario = pgEnum("status_usuario", ["ativo", "inativo"]);
@@ -44,3 +54,17 @@ export const barbeariaInfo = pgTable("barbearia_info", {
 });
 
 export type BarbeariaInfo = typeof barbeariaInfo.$inferSelect;
+
+export const barbeiros = pgTable("barbeiros", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull(),
+  fotoUrl: text("foto_url"),
+  ativo: boolean("ativo").notNull().default(true),
+  comissaoPercentual: numeric("comissao_percentual", { precision: 5, scale: 2 })
+    .notNull()
+    .default("0"),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Barbeiro = typeof barbeiros.$inferSelect;
+export type NovoBarbeiro = typeof barbeiros.$inferInsert;

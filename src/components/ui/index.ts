@@ -4,3 +4,8 @@ export { Textarea } from "./textarea";
 export { Field, Label, FormError, FormSuccess } from "./field";
 export { Card } from "./card";
 export { PageHeader } from "./page-header";
+export { Badge } from "./badge";
+export { Toggle } from "./toggle";
+export { Modal } from "./modal";
+export { ConfirmModal } from "./confirm-modal";
+export { DataTable } from "./data-table";
