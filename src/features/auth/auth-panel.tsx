@@ -11,10 +11,12 @@ export function AuthPanel({
   defaultTab = "login",
   nomeBarbearia,
   logoUrl,
+  aviso,
 }: {
   defaultTab?: Tab;
   nomeBarbearia: string;
   logoUrl: string | null;
+  aviso?: string;
 }) {
   const [tab, setTab] = useState<Tab>(defaultTab);
 
@@ -44,6 +46,12 @@ export function AuthPanel({
       <p className="mt-1.5 text-center text-sm text-muted lg:text-left">
         Acesse sua conta ou crie uma nova.
       </p>
+
+      {aviso && (
+        <div className="mt-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          {aviso}
+        </div>
+      )}
 
       <div className="mt-7 grid grid-cols-2 gap-1 rounded-xl border border-line bg-surface p-1">
         {(["login", "cadastro"] as const).map((value) => (
