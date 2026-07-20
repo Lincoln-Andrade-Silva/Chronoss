@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, gte, lt, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { agendamentos, expediente, servicos } from "@/db/schema";
 import { getCurrentProfile } from "@/lib/auth";
@@ -41,13 +41,18 @@ async function ocupadosDoDia(barbeiroId: string, data: string): Promise<Interval
 
 export async function getHorariosDisponiveis(
   barbeiroId: string,
-  servicoId: string,
+  servicoIds: string[],
   data: string,
 ): Promise<string[]> {
   await getCurrentProfile();
 
-  const [servico] = await db.select().from(servicos).where(eq(servicos.id, servicoId));
-  if (!servico) return [];
+  if (servicoIds.length === 0) return [];
+  const servs = await db.select().from(servicos).where(inArray(servicos.id, servicoIds));
+  if (servs.length === 0) return [];
+  const duracaoTotal = servicoIds.reduce(
+    (soma, id) => soma + (servs.find((s) => s.id === id)?.duracaoMinutos ?? 0),
+    0,
+  );
 
   const diaSemana = new Date(`${data}T12:00:00${"-03:00"}`).getDay();
 
@@ -85,31 +90,38 @@ export async function getHorariosDisponiveis(
     data,
     abre,
     fecha,
-    duracaoMinutos: servico.duracaoMinutos,
+    duracaoMinutos: duracaoTotal,
     passoMinutos: PASSO_MINUTOS,
     ocupados,
     agora: new Date(),
   });
 }
 
-export interface PrecoAgendamento {
+export interface ItemPreco {
+  servicoId: string;
   coberto: boolean;
   valor: string;
 }
 
-/** Preço efetivo do serviço na data escolhida, considerando cobertura do plano do cliente. */
+/** Preço efetivo de cada serviço na data escolhida, considerando a cobertura do plano. */
 export async function getPrecoAgendamento(
-  servicoId: string,
+  servicoIds: string[],
   data: string,
-): Promise<PrecoAgendamento> {
+): Promise<ItemPreco[]> {
   const profile = await getCurrentProfile();
+  if (servicoIds.length === 0) return [];
 
-  const [servico] = await db.select().from(servicos).where(eq(servicos.id, servicoId));
-  if (!servico) return { coberto: false, valor: "0" };
-
+  const servs = await db.select().from(servicos).where(inArray(servicos.id, servicoIds));
   const inicio = instanteSlot(data, "12:00");
-  const coberto = await servicoCobertoPorPlano(profile.id, servicoId, data, inicio);
-  return { coberto, valor: coberto ? "0" : servico.preco };
+
+  const itens: ItemPreco[] = [];
+  for (const id of servicoIds) {
+    const servico = servs.find((s) => s.id === id);
+    if (!servico) continue;
+    const coberto = await servicoCobertoPorPlano(profile.id, id, data, inicio);
+    itens.push({ servicoId: id, coberto, valor: coberto ? "0" : servico.preco });
+  }
+  return itens;
 }
 
 export interface CriarAgendamentoResult {
@@ -119,41 +131,54 @@ export interface CriarAgendamentoResult {
 
 export async function criarAgendamento(
   barbeiroId: string,
-  servicoId: string,
+  servicoIds: string[],
   data: string,
   hora: string,
 ): Promise<CriarAgendamentoResult> {
   const profile = await getCurrentProfile();
 
-  const [servico] = await db.select().from(servicos).where(eq(servicos.id, servicoId));
-  if (!servico) return { error: "Serviço não encontrado." };
+  if (servicoIds.length === 0) return { error: "Selecione ao menos um serviço." };
+  const servs = await db.select().from(servicos).where(inArray(servicos.id, servicoIds));
+  const ordenados = servicoIds.map((id) => servs.find((s) => s.id === id));
+  if (ordenados.some((s) => !s)) return { error: "Serviço não encontrado." };
+  const servicosOrdenados = ordenados as (typeof servs)[number][];
 
-  const inicio = instanteSlot(data, hora);
-  const fim = new Date(inicio.getTime() + servico.duracaoMinutos * 60_000);
+  const duracaoTotal = servicosOrdenados.reduce((soma, s) => soma + s.duracaoMinutos, 0);
+  const inicioBloco = instanteSlot(data, hora);
+  const fimBloco = new Date(inicioBloco.getTime() + duracaoTotal * 60_000);
 
-  if (inicio.getTime() <= Date.now()) {
+  if (inicioBloco.getTime() <= Date.now()) {
     return { error: "Não é possível agendar em um horário no passado." };
   }
 
-  // Recheck de conflito no servidor (evita corrida).
+  // Recheck de conflito no servidor: todo o bloco precisa estar livre.
   const ocupados = await ocupadosDoDia(barbeiroId, data);
-  const colide = ocupados.some((o) => inicio < o.fim && o.inicio < fim);
+  const colide = ocupados.some((o) => inicioBloco < o.fim && o.inicio < fimBloco);
   if (colide) {
     return { error: "Esse horário acabou de ser ocupado. Escolha outro." };
   }
 
-  const coberto = await servicoCobertoPorPlano(profile.id, servicoId, data, inicio);
-
-  try {
-    await db.insert(agendamentos).values({
+  const grupoId = servicosOrdenados.length > 1 ? crypto.randomUUID() : null;
+  const linhas = [];
+  let offset = 0;
+  for (const servico of servicosOrdenados) {
+    const inicio = new Date(inicioBloco.getTime() + offset * 60_000);
+    const coberto = await servicoCobertoPorPlano(profile.id, servico.id, data, inicio);
+    linhas.push({
       clienteId: profile.id,
       barbeiroId,
-      servicoId,
+      servicoId: servico.id,
+      grupoId,
       dataHora: inicio,
       valor: coberto ? "0" : servico.preco,
-      tipo: coberto ? "plano" : "avulso",
-      status: "agendado",
+      tipo: coberto ? ("plano" as const) : ("avulso" as const),
+      status: "agendado" as const,
     });
+    offset += servico.duracaoMinutos;
+  }
+
+  try {
+    await db.insert(agendamentos).values(linhas);
   } catch (err) {
     console.error("Falha ao criar agendamento:", err);
     return { error: "Não foi possível agendar. Tente novamente." };
@@ -178,7 +203,11 @@ export async function cancelarAgendamento(id: string): Promise<CriarAgendamentoR
     return { error: "Não é possível cancelar um horário que já passou." };
   }
 
-  await db.update(agendamentos).set({ status: "cancelado" }).where(eq(agendamentos.id, id));
+  // Cancela a marcação inteira (todos os serviços do grupo, se houver).
+  await db
+    .update(agendamentos)
+    .set({ status: "cancelado" })
+    .where(ag.grupoId ? eq(agendamentos.grupoId, ag.grupoId) : eq(agendamentos.id, id));
   revalidatePath("/meus-agendamentos");
   return { ok: true };
 }

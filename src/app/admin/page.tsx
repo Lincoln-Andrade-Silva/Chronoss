@@ -25,6 +25,7 @@ import { formatBRL } from "@/lib/format";
 import { diasAtras, gerarDias, hojeSP, spYmd } from "@/features/relatorios/datas";
 import { PeriodoNav } from "@/features/relatorios/periodo-nav";
 import { GraficoBarras, KpiGrid, Ranking, Secao } from "@/features/relatorios/ui";
+import { RankingProfissional } from "@/features/relatorios/ranking-profissional";
 
 export const dynamic = "force-dynamic";
 
@@ -128,25 +129,53 @@ export default async function AdminHome({
   const maxStatus = Math.max(1, finalizados.length, pendentes, cancelados);
 
   // Por profissional
-  const porBarbeiro = new Map<
+  // Detalhe por profissional (serviços, faturamento e comissão) para os painéis expansíveis
+  const detalheBarbeiro = new Map<
     string,
-    { nome: string; foto: string | null; atend: number; fat: number; pct: number }
+    {
+      id: string;
+      nome: string;
+      foto: string | null;
+      pct: number;
+      faturamento: number;
+      comissao: number;
+      servicos: Map<string, { qtd: number; valor: number; comissao: number }>;
+    }
   >();
   for (const r of finalizados) {
-    const a =
-      porBarbeiro.get(r.barbeiroId) ??
-      { nome: r.barbeiroNome, foto: r.barbeiroFoto, atend: 0, fat: 0, pct: Number(r.comissao) };
-    a.atend += 1;
-    a.fat += Number(r.valor);
-    porBarbeiro.set(r.barbeiroId, a);
+    const d =
+      detalheBarbeiro.get(r.barbeiroId) ??
+      {
+        id: r.barbeiroId,
+        nome: r.barbeiroNome,
+        foto: r.barbeiroFoto,
+        pct: Number(r.comissao),
+        faturamento: 0,
+        comissao: 0,
+        servicos: new Map<string, { qtd: number; valor: number; comissao: number }>(),
+      };
+    const c = (Number(r.valor) * Number(r.comissao)) / 100;
+    d.faturamento += Number(r.valor);
+    d.comissao += c;
+    const sv = d.servicos.get(r.servicoNome) ?? { qtd: 0, valor: 0, comissao: 0 };
+    sv.qtd += 1;
+    sv.valor += Number(r.valor);
+    sv.comissao += c;
+    d.servicos.set(r.servicoNome, sv);
+    detalheBarbeiro.set(r.barbeiroId, d);
   }
-  const profissionais = [...porBarbeiro.values()].sort((a, b) => b.fat - a.fat);
-  const comissoes = profissionais.reduce((s, b) => s + (b.fat * b.pct) / 100, 0);
-  const maxFatBarbeiro = Math.max(1, ...profissionais.map((b) => b.fat));
-  const comissoesRank = profissionais
-    .map((b) => ({ nome: b.nome, foto: b.foto, pct: b.pct, valor: (b.fat * b.pct) / 100 }))
-    .sort((a, b) => b.valor - a.valor);
-  const maxComissao = Math.max(1, ...comissoesRank.map((c) => c.valor));
+  const profissionaisDetalhe = [...detalheBarbeiro.values()].map((d) => ({
+    id: d.id,
+    nome: d.nome,
+    foto: d.foto,
+    pct: d.pct,
+    faturamento: d.faturamento,
+    comissao: d.comissao,
+    servicos: [...d.servicos.entries()]
+      .map(([nome, v]) => ({ nome, ...v }))
+      .sort((a, b) => b.valor - a.valor),
+  }));
+  const comissoes = profissionaisDetalhe.reduce((s, b) => s + b.comissao, 0);
 
   // Top serviços
   const porServico = new Map<string, { qtd: number; fat: number }>();
@@ -294,29 +323,11 @@ export default async function AdminHome({
         </Secao>
 
         <Secao titulo="Faturamento por profissional">
-          <Ranking
-            vazio="Nenhum atendimento no período."
-            itens={profissionais.map((b) => ({
-              nome: b.nome,
-              avatarUrl: b.foto,
-              destaque: formatBRL(b.fat),
-              sub: `${b.atend} atend.`,
-              proporcao: (b.fat / maxFatBarbeiro) * 100,
-            }))}
-          />
+          <RankingProfissional itens={profissionaisDetalhe} metrica="faturamento" />
         </Secao>
 
         <Secao titulo="Comissões por profissional">
-          <Ranking
-            vazio="Nenhum atendimento no período."
-            itens={comissoesRank.map((c) => ({
-              nome: c.nome,
-              avatarUrl: c.foto,
-              destaque: formatBRL(c.valor),
-              sub: `${c.pct.toFixed(0)}%`,
-              proporcao: (c.valor / maxComissao) * 100,
-            }))}
-          />
+          <RankingProfissional itens={profissionaisDetalhe} metrica="comissao" />
         </Secao>
       </div>
     </div>

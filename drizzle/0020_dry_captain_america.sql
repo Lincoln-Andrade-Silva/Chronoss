@@ -1,0 +1,1 @@
+ALTER TABLE "agendamentos" ADD COLUMN "grupo_id" uuid;
