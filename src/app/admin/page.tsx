@@ -25,7 +25,7 @@ import { formatBRL } from "@/lib/format";
 import { diasAtras, gerarDias, hojeSP, spYmd } from "@/features/relatorios/datas";
 import { PeriodoNav } from "@/features/relatorios/periodo-nav";
 import { GraficoBarras, KpiGrid, Ranking, Secao } from "@/features/relatorios/ui";
-import { RankingProfissional } from "@/features/relatorios/ranking-profissional";
+import { RankingExpansivel } from "@/features/relatorios/ranking-expansivel";
 
 export const dynamic = "force-dynamic";
 
@@ -176,6 +176,43 @@ export default async function AdminHome({
       .sort((a, b) => b.valor - a.valor),
   }));
   const comissoes = profissionaisDetalhe.reduce((s, b) => s + b.comissao, 0);
+  const maxFatProf = Math.max(1, ...profissionaisDetalhe.map((p) => p.faturamento));
+  const maxComProf = Math.max(1, ...profissionaisDetalhe.map((p) => p.comissao));
+
+  const faturamentoProfItens = [...profissionaisDetalhe]
+    .sort((a, b) => b.faturamento - a.faturamento)
+    .map((p) => ({
+      id: p.id,
+      nome: p.nome,
+      foto: p.foto,
+      destaque: formatBRL(p.faturamento),
+      proporcao: (p.faturamento / maxFatProf) * 100,
+      colValor: "Valor",
+      linhas: p.servicos.map((s) => ({ nome: s.nome, qtd: s.qtd, valor: formatBRL(s.valor) })),
+      totalValor: formatBRL(p.faturamento),
+    }));
+
+  const comissaoProfItens = [...profissionaisDetalhe]
+    .sort((a, b) => b.comissao - a.comissao)
+    .map((p) => ({
+      id: p.id,
+      nome: p.nome,
+      foto: p.foto,
+      destaque: formatBRL(p.comissao),
+      sub: `${p.pct.toFixed(0)}% de comissão`,
+      proporcao: (p.comissao / maxComProf) * 100,
+      colValor: "Valor",
+      colExtra: "Comissão",
+      linhas: p.servicos.map((s) => ({
+        nome: s.nome,
+        qtd: s.qtd,
+        valor: formatBRL(s.valor),
+        extra: formatBRL(s.comissao),
+      })),
+      totalValor: formatBRL(p.faturamento),
+      totalExtra: formatBRL(p.comissao),
+      totalRotulo: `Total (${p.pct.toFixed(0)}%)`,
+    }));
 
   // Top serviços
   const porServico = new Map<string, { qtd: number; fat: number }>();
@@ -323,11 +360,11 @@ export default async function AdminHome({
         </Secao>
 
         <Secao titulo="Faturamento por profissional">
-          <RankingProfissional itens={profissionaisDetalhe} metrica="faturamento" />
+          <RankingExpansivel itens={faturamentoProfItens} vazio="Nenhum atendimento no período." />
         </Secao>
 
         <Secao titulo="Comissões por profissional">
-          <RankingProfissional itens={profissionaisDetalhe} metrica="comissao" />
+          <RankingExpansivel itens={comissaoProfItens} vazio="Nenhum atendimento no período." />
         </Secao>
       </div>
     </div>

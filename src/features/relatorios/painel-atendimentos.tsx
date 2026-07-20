@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { agendamentos, barbeiros, profiles, servicos } from "@/db/schema";
 import { formatBRL } from "@/lib/format";
 import { diaCurto, gerarDias, spYmd } from "./datas";
+import { RankingExpansivel } from "./ranking-expansivel";
 import { GraficoBarras, KpiGrid, Ranking, Secao, Tabela } from "./ui";
 
 const LIMITE_DETALHE = 100;
@@ -59,14 +60,38 @@ export async function PainelAtendimentos({
   const servicosRank = [...porServico.entries()].sort((a, b) => b[1].qtd - a[1].qtd);
   const maxServico = Math.max(1, ...servicosRank.map(([, v]) => v.qtd));
 
-  const porBarbeiro = new Map<string, { nome: string; foto: string | null; qtd: number }>();
+  const porBarbeiro = new Map<
+    string,
+    { id: string; nome: string; foto: string | null; qtd: number; fat: number; servicos: Map<string, { qtd: number; valor: number }> }
+  >();
   for (const r of finalizados) {
-    const a = porBarbeiro.get(r.barbeiroId) ?? { nome: r.barbeiroNome, foto: r.barbeiroFoto, qtd: 0 };
+    const a =
+      porBarbeiro.get(r.barbeiroId) ??
+      { id: r.barbeiroId, nome: r.barbeiroNome, foto: r.barbeiroFoto, qtd: 0, fat: 0, servicos: new Map() };
     a.qtd += 1;
+    a.fat += Number(r.valor);
+    const sv = a.servicos.get(r.servicoNome) ?? { qtd: 0, valor: 0 };
+    sv.qtd += 1;
+    sv.valor += Number(r.valor);
+    a.servicos.set(r.servicoNome, sv);
     porBarbeiro.set(r.barbeiroId, a);
   }
-  const barbeirosRank = [...porBarbeiro.values()].sort((a, b) => b.qtd - a.qtd);
-  const maxBarbeiro = Math.max(1, ...barbeirosRank.map((v) => v.qtd));
+  const maxBarbeiro = Math.max(1, ...[...porBarbeiro.values()].map((v) => v.qtd));
+  const barbeirosItens = [...porBarbeiro.values()]
+    .sort((a, b) => b.qtd - a.qtd)
+    .map((b) => ({
+      id: b.id,
+      nome: b.nome,
+      foto: b.foto,
+      destaque: `${b.qtd}x`,
+      sub: formatBRL(b.fat),
+      proporcao: (b.qtd / maxBarbeiro) * 100,
+      colValor: "Valor",
+      linhas: [...b.servicos.entries()]
+        .sort((a, c) => c[1].qtd - a[1].qtd)
+        .map(([nome, v]) => ({ nome, qtd: v.qtd, valor: formatBRL(v.valor) })),
+      totalValor: formatBRL(b.fat),
+    }));
 
   const detalhe = finalizados.slice(0, LIMITE_DETALHE);
 
@@ -100,15 +125,7 @@ export async function PainelAtendimentos({
         </Secao>
 
         <Secao titulo="Atendimentos por profissional">
-          <Ranking
-            vazio="Nenhum atendimento no período."
-            itens={barbeirosRank.map((b) => ({
-              nome: b.nome,
-              avatarUrl: b.foto,
-              destaque: `${b.qtd}x`,
-              proporcao: (b.qtd / maxBarbeiro) * 100,
-            }))}
-          />
+          <RankingExpansivel itens={barbeirosItens} vazio="Nenhum atendimento no período." />
         </Secao>
       </div>
 

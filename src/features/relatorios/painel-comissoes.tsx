@@ -4,7 +4,8 @@ import { db } from "@/db";
 import { agendamentos, barbeiros, profiles, servicos } from "@/db/schema";
 import { formatBRL } from "@/lib/format";
 import { gerarDias, spYmd } from "./datas";
-import { GraficoBarras, KpiGrid, Secao, Tabela } from "./ui";
+import { RankingExpansivel } from "./ranking-expansivel";
+import { GraficoBarras, KpiGrid, Secao } from "./ui";
 
 export async function PainelComissoes({
   inicio,
@@ -47,28 +48,64 @@ export async function PainelComissoes({
 
   const porBarbeiro = new Map<
     string,
-    { nome: string; foto: string | null; pct: number; atendimentos: number; faturamento: number }
+    {
+      id: string;
+      nome: string;
+      foto: string | null;
+      pct: number;
+      faturamento: number;
+      comissao: number;
+      servicos: Map<string, { qtd: number; valor: number; comissao: number }>;
+    }
   >();
   for (const r of finalizados) {
     const a =
       porBarbeiro.get(r.barbeiroId) ??
       {
+        id: r.barbeiroId,
         nome: r.barbeiroNome,
         foto: r.barbeiroFoto,
         pct: Number(r.comissao),
-        atendimentos: 0,
         faturamento: 0,
+        comissao: 0,
+        servicos: new Map<string, { qtd: number; valor: number; comissao: number }>(),
       };
-    a.atendimentos += 1;
+    const c = (Number(r.valor) * Number(r.comissao)) / 100;
     a.faturamento += Number(r.valor);
+    a.comissao += c;
+    const sv = a.servicos.get(r.servicoNome) ?? { qtd: 0, valor: 0, comissao: 0 };
+    sv.qtd += 1;
+    sv.valor += Number(r.valor);
+    sv.comissao += c;
+    a.servicos.set(r.servicoNome, sv);
     porBarbeiro.set(r.barbeiroId, a);
   }
-  const resumo = [...porBarbeiro.values()]
-    .map((b) => ({ ...b, comissaoValor: (b.faturamento * b.pct) / 100 }))
-    .sort((a, b) => b.comissaoValor - a.comissaoValor);
-
-  const comissoesTotais = resumo.reduce((s, b) => s + b.comissaoValor, 0);
+  const resumo = [...porBarbeiro.values()].sort((a, b) => b.comissao - a.comissao);
+  const comissoesTotais = resumo.reduce((s, b) => s + b.comissao, 0);
   const faturamentoTotal = resumo.reduce((s, b) => s + b.faturamento, 0);
+  const maxComissao = Math.max(1, ...resumo.map((b) => b.comissao));
+
+  const comissaoItens = resumo.map((b) => ({
+    id: b.id,
+    nome: b.nome,
+    foto: b.foto,
+    destaque: formatBRL(b.comissao),
+    sub: `${b.pct.toFixed(0)}% de comissão`,
+    proporcao: (b.comissao / maxComissao) * 100,
+    colValor: "Valor",
+    colExtra: "Comissão",
+    linhas: [...b.servicos.entries()]
+      .sort((a, c) => c[1].comissao - a[1].comissao)
+      .map(([nome, v]) => ({
+        nome,
+        qtd: v.qtd,
+        valor: formatBRL(v.valor),
+        extra: formatBRL(v.comissao),
+      })),
+    totalValor: formatBRL(b.faturamento),
+    totalExtra: formatBRL(b.comissao),
+    totalRotulo: `Total (${b.pct.toFixed(0)}%)`,
+  }));
 
   return (
     <div className="space-y-6">
@@ -84,35 +121,8 @@ export async function PainelComissoes({
         <GraficoBarras dados={serie} formato="moeda" />
       </Secao>
 
-      <Secao titulo="Resumo por profissional">
-        <Tabela
-          cabecalho={["Profissional", "%", "Atend.", "Faturamento", "Comissão"]}
-          avatars={resumo.map((b) => b.foto)}
-          linhas={resumo.map((b) => [
-            b.nome,
-            `${b.pct.toFixed(0)}%`,
-            String(b.atendimentos),
-            formatBRL(b.faturamento),
-            formatBRL(b.comissaoValor),
-          ])}
-          vazio="Nenhum atendimento finalizado no período."
-        />
-      </Secao>
-
-      <Secao titulo="Detalhamento das comissões">
-        <Tabela
-          cabecalho={["Profissional", "Serviço", "Cliente", "Valor", "%", "Comissão"]}
-          avatars={finalizados.map((r) => r.barbeiroFoto)}
-          linhas={finalizados.map((r) => [
-            r.barbeiroNome,
-            r.servicoNome,
-            r.clienteNome,
-            formatBRL(r.valor),
-            `${Number(r.comissao).toFixed(0)}%`,
-            formatBRL((Number(r.valor) * Number(r.comissao)) / 100),
-          ])}
-          vazio="Nenhum atendimento finalizado no período."
-        />
+      <Secao titulo="Comissão por profissional">
+        <RankingExpansivel itens={comissaoItens} vazio="Nenhum atendimento finalizado no período." />
       </Secao>
     </div>
   );

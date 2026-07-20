@@ -16,12 +16,14 @@ export default async function MeusAgendamentosPage() {
   const rows = await db
     .select({
       id: agendamentos.id,
+      grupoId: agendamentos.grupoId,
       dataHora: agendamentos.dataHora,
       status: agendamentos.status,
       tipo: agendamentos.tipo,
       valor: agendamentos.valor,
       servicoNome: servicos.nome,
       barbeiroNome: barbeiros.nome,
+      barbeiroFoto: barbeiros.fotoUrl,
     })
     .from(agendamentos)
     .innerJoin(servicos, eq(agendamentos.servicoId, servicos.id))
@@ -31,12 +33,14 @@ export default async function MeusAgendamentosPage() {
 
   const items = rows.map((r) => ({
     id: r.id,
+    grupoId: r.grupoId,
     dataHoraISO: r.dataHora.toISOString(),
     status: r.status,
     tipo: r.tipo,
     valor: r.valor,
     servicoNome: r.servicoNome,
     barbeiroNome: r.barbeiroNome,
+    barbeiroFoto: r.barbeiroFoto,
   }));
 
   return (
