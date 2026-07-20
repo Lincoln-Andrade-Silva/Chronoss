@@ -144,26 +144,32 @@ export function PlanoModal({
                   <div
                     key={s.id}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg border p-3 transition",
+                      "rounded-lg border p-3 transition",
                       incluido ? "border-brand/40 bg-surface" : "border-line",
                     )}
                   >
-                    <Toggle on={incluido} onClick={() => toggleServico(s.id)} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{s.nome}</p>
-                      <p className="truncate text-xs text-muted">
-                        {formatDuracao(s.duracaoMinutos)} · {formatBRL(s.preco)}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <Toggle on={incluido} onClick={() => toggleServico(s.id)} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{s.nome}</p>
+                        <p className="truncate text-xs text-muted">
+                          {formatDuracao(s.duracaoMinutos)} · {formatBRL(s.preco)}
+                        </p>
+                      </div>
                     </div>
                     {incluido && (
-                      <Input
-                        type="number"
-                        min={1}
-                        placeholder="Ilimitado"
-                        value={selecionados.get(s.id) ?? ""}
-                        onChange={(e) => setLimite(s.id, e.target.value)}
-                        className="h-10 w-24 shrink-0 py-2"
-                      />
+                      <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
+                        <span className="text-xs text-muted">Limite:</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          placeholder="Ilimitado"
+                          value={selecionados.get(s.id) ?? ""}
+                          onChange={(e) => setLimite(s.id, e.target.value)}
+                          className="h-9 w-28 py-2"
+                        />
+                        <span className="text-xs text-muted">usos por período</span>
+                      </div>
                     )}
                   </div>
                 );
