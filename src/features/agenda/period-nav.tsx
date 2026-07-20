@@ -8,22 +8,25 @@ function ymd(d: Date): string {
   return d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 }
 
+function rangeParaDias(dias: number): [string, string] {
+  const hoje = new Date();
+  const ini = new Date();
+  ini.setDate(ini.getDate() - (dias - 1));
+  return [ymd(ini), ymd(hoje)];
+}
+
+const ATALHOS = [
+  { label: "Hoje", dias: 1 },
+  { label: "7 dias", dias: 7 },
+  { label: "30 dias", dias: 30 },
+];
+
 export function PeriodNav({ inicio, fim }: { inicio: string; fim: string }) {
   const router = useRouter();
 
   function ir(novoInicio: string, novoFim: string) {
     router.push(`/admin/agenda?inicio=${novoInicio}&fim=${novoFim}`);
   }
-
-  function atalho(dias: number) {
-    const hoje = new Date();
-    const ini = new Date();
-    ini.setDate(ini.getDate() - (dias - 1));
-    ir(ymd(ini), ymd(hoje));
-  }
-
-  const atalhoBtn =
-    "inline-flex h-11 flex-1 items-center justify-center rounded-lg border border-line px-3 text-sm font-medium text-muted transition hover:bg-surface hover:text-ink sm:flex-none";
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
@@ -43,15 +46,25 @@ export function PeriodNav({ inicio, fim }: { inicio: string; fim: string }) {
         />
       </div>
       <div className="flex gap-2">
-        <button type="button" className={cn(atalhoBtn)} onClick={() => atalho(1)}>
-          Hoje
-        </button>
-        <button type="button" className={cn(atalhoBtn)} onClick={() => atalho(7)}>
-          7 dias
-        </button>
-        <button type="button" className={cn(atalhoBtn)} onClick={() => atalho(30)}>
-          30 dias
-        </button>
+        {ATALHOS.map(({ label, dias }) => {
+          const [i, f] = rangeParaDias(dias);
+          const ativo = i === inicio && f === fim;
+          return (
+            <button
+              key={dias}
+              type="button"
+              onClick={() => ir(i, f)}
+              className={cn(
+                "inline-flex h-11 flex-1 items-center justify-center rounded-lg border px-3 text-sm font-medium transition sm:flex-none",
+                ativo
+                  ? "border-transparent bg-brand text-white shadow-brand"
+                  : "border-line text-muted hover:bg-surface hover:text-ink",
+              )}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
