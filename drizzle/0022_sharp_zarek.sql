@@ -1,0 +1,1 @@
+ALTER TABLE "vendas_produtos" ADD COLUMN "cliente_avulso" text;

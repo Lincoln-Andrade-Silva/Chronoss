@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
 import { Percent, Scissors, Users } from "lucide-react";
 import { db } from "@/db";
-import { agendamentos, barbeiros, profiles, servicos } from "@/db/schema";
+import { agendamentos, barbeiros, servicos } from "@/db/schema";
 import { formatBRL } from "@/lib/format";
 import { gerarDias, spYmd } from "./datas";
 import { RankingExpansivel } from "./ranking-expansivel";
@@ -23,12 +23,10 @@ export async function PainelComissoes({
       barbeiroFoto: barbeiros.fotoUrl,
       comissao: barbeiros.comissaoPercentual,
       servicoNome: servicos.nome,
-      clienteNome: profiles.nome,
     })
     .from(agendamentos)
     .innerJoin(barbeiros, eq(agendamentos.barbeiroId, barbeiros.id))
     .innerJoin(servicos, eq(agendamentos.servicoId, servicos.id))
-    .innerJoin(profiles, eq(agendamentos.clienteId, profiles.id))
     .where(
       and(
         eq(agendamentos.status, "finalizado"),

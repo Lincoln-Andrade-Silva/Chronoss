@@ -30,6 +30,7 @@ export async function registrarVenda(
   quantidade: number,
   barbeiroId: string,
   clienteId: string | null,
+  clienteAvulso?: string,
 ): Promise<VendaFormState> {
   await requireAdmin();
 
@@ -44,6 +45,7 @@ export async function registrarVenda(
   }
 
   const dados = parsed.data;
+  const nomeAvulso = dados.clienteId ? null : clienteAvulso?.trim() || null;
 
   try {
     const [produto] = await db.select().from(produtos).where(eq(produtos.id, dados.produtoId));
@@ -59,6 +61,7 @@ export async function registrarVenda(
       total: total.toFixed(2),
       barbeiroId: dados.barbeiroId,
       clienteId: dados.clienteId,
+      clienteAvulso: nomeAvulso,
     });
   } catch (err) {
     console.error("Falha ao registrar venda:", err);

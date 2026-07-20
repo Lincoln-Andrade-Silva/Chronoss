@@ -24,6 +24,7 @@ export async function PainelAtendimentos({
       tipo: agendamentos.tipo,
       clienteId: agendamentos.clienteId,
       clienteNome: profiles.nome,
+      clienteAvulso: agendamentos.clienteAvulso,
       barbeiroId: agendamentos.barbeiroId,
       barbeiroNome: barbeiros.nome,
       barbeiroFoto: barbeiros.fotoUrl,
@@ -32,7 +33,7 @@ export async function PainelAtendimentos({
     .from(agendamentos)
     .innerJoin(servicos, eq(agendamentos.servicoId, servicos.id))
     .innerJoin(barbeiros, eq(agendamentos.barbeiroId, barbeiros.id))
-    .innerJoin(profiles, eq(agendamentos.clienteId, profiles.id))
+    .leftJoin(profiles, eq(agendamentos.clienteId, profiles.id))
     .where(and(gte(agendamentos.dataHora, inicio), lt(agendamentos.dataHora, fimExclusivo)))
     .orderBy(desc(agendamentos.dataHora));
 
@@ -136,7 +137,7 @@ export async function PainelAtendimentos({
           linhas={detalhe.map((r) => [
             r.barbeiroNome,
             r.servicoNome,
-            r.clienteNome,
+            r.clienteNome ?? r.clienteAvulso ?? "Sem cadastro",
             diaCurto(spYmd(r.dataHora)),
             formatBRL(r.valor),
           ])}

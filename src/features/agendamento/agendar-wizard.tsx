@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, ChevronLeft, Clock, Scissors, Star } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, Clock, Scissors, Star, Zap } from "lucide-react";
 import { Button, Card, FormError } from "@/components/ui";
 import type { Barbeiro, Servico } from "@/db/schema";
 import { cn } from "@/lib/cn";
@@ -51,9 +51,11 @@ export function AgendarWizard({
   const [slots, setSlots] = useState<string[]>([]);
   const [precos, setPrecos] = useState<ItemPreco[] | null>(null);
   const [carregandoSlots, setCarregandoSlots] = useState(false);
+  const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
   const [enviando, startTransition] = useTransition();
+  const pularReset = useRef(false);
 
   const idsKey = selecionados.map((s) => s.id).join(",");
   const duracaoTotal = selecionados.reduce((s, x) => s + x.duracaoMinutos, 0);
@@ -77,11 +79,15 @@ export function AgendarWizard({
     if (passo !== 2 || !barbeiro || selecionados.length === 0) return;
     let ativo = true;
     setCarregandoSlots(true);
-    setHora(null);
     getHorariosDisponiveis(barbeiro.id, idsKey.split(","), data).then((res) => {
-      if (ativo) {
-        setSlots(res);
-        setCarregandoSlots(false);
+      if (!ativo) return;
+      setSlots(res);
+      setCarregandoSlots(false);
+      if (pularReset.current) {
+        pularReset.current = false;
+        setHora(res[0] ?? null);
+      } else {
+        setHora(null);
       }
     });
     return () => {
@@ -100,6 +106,27 @@ export function AgendarWizard({
       ativo = false;
     };
   }, [passo, idsKey, data, selecionados.length]);
+
+  async function primeiroDisponivel() {
+    if (!barbeiro || selecionados.length === 0) return;
+    const ids = selecionados.map((s) => s.id);
+    setBuscando(true);
+    for (const dia of PROXIMOS_DIAS) {
+      const res = await getHorariosDisponiveis(barbeiro.id, ids, dia);
+      if (res.length > 0) {
+        if (dia === data) {
+          setSlots(res);
+          setHora(res[0]);
+        } else {
+          pularReset.current = true;
+          setData(dia);
+        }
+        setBuscando(false);
+        return;
+      }
+    }
+    setBuscando(false);
+  }
 
   function toggleServico(s: Servico) {
     setSelecionados((prev) =>
@@ -320,6 +347,16 @@ export function AgendarWizard({
           <div className="rounded-lg border border-line bg-surface/30 px-4 py-2.5 text-xs text-muted">
             {selecionados.map((s) => s.nome).join(" + ")} · {formatDuracao(duracaoTotal)}
           </div>
+
+          <button
+            type="button"
+            onClick={primeiroDisponivel}
+            disabled={buscando}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-brand/40 bg-brand/5 py-2.5 text-sm font-semibold text-brand-light transition hover:bg-brand/10 disabled:opacity-50"
+          >
+            <Zap className="h-4 w-4" />
+            {buscando ? "Procurando..." : "Primeiro horário disponível"}
+          </button>
 
           {carregandoSlots ? (
             <p className="py-6 text-center text-sm text-muted">Carregando horários...</p>
