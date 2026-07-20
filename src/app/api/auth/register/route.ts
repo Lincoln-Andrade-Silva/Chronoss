@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { getServiceRoleKey, getSupabaseUrl } from "@/lib/supabase/config";
 
 export const runtime = "nodejs";
 
@@ -22,8 +23,8 @@ export async function POST(request: Request) {
   }
 
   const { nome, email, telefone, senha } = parsed.data;
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = getSupabaseUrl();
+  const serviceKey = getServiceRoleKey();
   if (!supabaseUrl || !serviceKey) {
     return NextResponse.json({ error: "Servidor mal configurado." }, { status: 500 });
   }

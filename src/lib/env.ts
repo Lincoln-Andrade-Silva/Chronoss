@@ -6,14 +6,26 @@ const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
 });
 
-const parsed = envSchema.safeParse(process.env);
+// Aceita os nomes da integração Supabase↔Vercel como fallback:
+// banco em `POSTGRES_URL` (pooler) e URL/anon em `SUPABASE_URL` / `SUPABASE_*_KEY`.
+const parsed = envSchema.safeParse({
+  DATABASE_URL: process.env.DATABASE_URL || process.env.POSTGRES_URL,
+  NEXT_PUBLIC_SUPABASE_URL:
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY:
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHED_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_ANON_KEY,
+});
 
 if (!parsed.success) {
   console.error(
     "❌ Variáveis de ambiente inválidas:",
     JSON.stringify(parsed.error.flatten().fieldErrors, null, 2),
   );
-  throw new Error("Configuração de ambiente inválida. Cheque o arquivo .env.");
+  throw new Error("Configuração de ambiente inválida. Cheque as variáveis de ambiente.");
 }
 
 export const env = parsed.data;

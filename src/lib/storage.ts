@@ -1,11 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
+import { getServiceRoleKey, getSupabaseUrl } from "@/lib/supabase/config";
 
 const BUCKET = "barbearia";
 
 /** Faz upload de uma imagem via service_role e retorna a URL pública. Server-only. */
 export async function uploadImagem(file: File, pasta: string): Promise<string> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = getSupabaseUrl();
+  const serviceKey = getServiceRoleKey();
   if (!url || !serviceKey) throw new Error("Storage não configurado.");
 
   const supabase = createClient(url, serviceKey, {
