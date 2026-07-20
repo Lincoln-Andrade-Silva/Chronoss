@@ -116,3 +116,22 @@ export async function criarAgendamento(
   revalidatePath("/meus-agendamentos");
   return { ok: true };
 }
+
+export async function cancelarAgendamento(id: string): Promise<CriarAgendamentoResult> {
+  const profile = await getCurrentProfile();
+
+  const [ag] = await db.select().from(agendamentos).where(eq(agendamentos.id, id));
+  if (!ag || ag.clienteId !== profile.id) {
+    return { error: "Agendamento não encontrado." };
+  }
+  if (ag.status !== "agendado") {
+    return { error: "Só é possível cancelar agendamentos ativos." };
+  }
+  if (new Date(ag.dataHora).getTime() <= Date.now()) {
+    return { error: "Não é possível cancelar um horário que já passou." };
+  }
+
+  await db.update(agendamentos).set({ status: "cancelado" }).where(eq(agendamentos.id, id));
+  revalidatePath("/meus-agendamentos");
+  return { ok: true };
+}

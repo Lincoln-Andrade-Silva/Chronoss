@@ -98,7 +98,7 @@ export function AgendarWizard({
           {servico?.nome} com {barbeiro?.nome} em {rotuloData(data).dia} às {hora}.
         </p>
         <div className="mt-6 flex flex-col gap-2">
-          <Button onClick={() => router.push("/")}>Voltar ao início</Button>
+          <Button onClick={() => router.push("/meus-agendamentos")}>Meus agendamentos</Button>
           <Button
             variant="secondary"
             onClick={() => {
