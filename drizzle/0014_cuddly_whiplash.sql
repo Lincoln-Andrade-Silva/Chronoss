@@ -1,0 +1,1 @@
+ALTER TABLE "plano_servicos" ADD COLUMN "valor" numeric(10, 2) DEFAULT '0' NOT NULL;

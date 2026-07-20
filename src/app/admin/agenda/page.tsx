@@ -1,11 +1,11 @@
 import { and, asc, eq, gte, lt } from "drizzle-orm";
-import { CalendarCheck, DollarSign, Receipt } from "lucide-react";
+import { Ban, CalendarCheck, CheckCircle2, DollarSign, Receipt } from "lucide-react";
 import { db } from "@/db";
 import { agendamentos, barbeiros, profiles, servicos } from "@/db/schema";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { instanteSlot } from "@/lib/disponibilidade";
 import { formatBRL } from "@/lib/format";
-import { DateNav } from "@/features/agenda/date-nav";
+import { PeriodNav } from "@/features/agenda/period-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +13,11 @@ function hojeSP(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 }
 
-function horaSP(dataHora: Date): string {
-  return dataHora.toLocaleTimeString("pt-BR", {
+function dataHoraSP(dataHora: Date): string {
+  return dataHora.toLocaleString("pt-BR", {
     timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -41,11 +43,15 @@ function StatusBadge({ status }: { status: LinhaAgenda["status"] }) {
 export default async function AgendaPage({
   searchParams,
 }: {
-  searchParams: { data?: string };
+  searchParams: { inicio?: string; fim?: string };
 }) {
-  const data = searchParams.data ?? hojeSP();
-  const inicio = instanteSlot(data, "00:00");
-  const fim = new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
+  const hoje = hojeSP();
+  let inicio = searchParams.inicio ?? hoje;
+  let fim = searchParams.fim ?? inicio;
+  if (fim < inicio) [inicio, fim] = [fim, inicio];
+
+  const inicioTs = instanteSlot(inicio, "00:00");
+  const fimTs = new Date(instanteSlot(fim, "00:00").getTime() + 24 * 60 * 60 * 1000);
 
   const rows: LinhaAgenda[] = await db
     .select({
@@ -62,13 +68,27 @@ export default async function AgendaPage({
     .innerJoin(barbeiros, eq(agendamentos.barbeiroId, barbeiros.id))
     .innerJoin(servicos, eq(agendamentos.servicoId, servicos.id))
     .innerJoin(profiles, eq(agendamentos.clienteId, profiles.id))
-    .where(and(gte(agendamentos.dataHora, inicio), lt(agendamentos.dataHora, fim)))
+    .where(and(gte(agendamentos.dataHora, inicioTs), lt(agendamentos.dataHora, fimTs)))
     .orderBy(asc(agendamentos.dataHora));
 
+  const cancelados = rows.filter((r) => r.status === "cancelado");
+  const finalizados = rows.filter((r) => r.status === "finalizado");
   const validos = rows.filter((r) => r.status !== "cancelado");
   const total = validos.reduce((soma, r) => soma + Number(r.valor), 0);
-  const qtd = validos.length;
-  const ticket = qtd > 0 ? total / qtd : 0;
+  const ticket = validos.length > 0 ? total / validos.length : 0;
+  const taxaCancelamento = rows.length > 0 ? (cancelados.length / rows.length) * 100 : 0;
+
+  const cards = [
+    { label: "Faturamento", valor: formatBRL(total), icon: DollarSign },
+    { label: "Atendimentos", valor: String(validos.length), icon: CalendarCheck },
+    { label: "Finalizados", valor: String(finalizados.length), icon: CheckCircle2 },
+    {
+      label: "Taxa de cancelamento",
+      valor: `${taxaCancelamento.toFixed(0)}%`,
+      icon: Ban,
+    },
+    { label: "Ticket médio", valor: formatBRL(ticket), icon: Receipt },
+  ];
 
   const grupos = new Map<string, { nome: string; itens: LinhaAgenda[] }>();
   for (const r of rows) {
@@ -77,26 +97,20 @@ export default async function AgendaPage({
     grupos.set(r.barbeiroId, grupo);
   }
 
-  const cards = [
-    { label: "Faturamento do dia", valor: formatBRL(total), icon: DollarSign },
-    { label: "Atendimentos", valor: String(qtd), icon: CalendarCheck },
-    { label: "Ticket médio", valor: formatBRL(ticket), icon: Receipt },
-  ];
-
   return (
     <div>
       <PageHeader
         title="Agenda"
-        description="Agendamentos e faturamento do dia."
-        action={<DateNav data={data} />}
+        description="Agendamentos e faturamento por período."
+        action={<PeriodNav inicio={inicio} fim={fim} />}
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {cards.map(({ label, valor, icon: Icon }) => (
           <Card key={label} className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-sm text-muted">{label}</span>
-              <Icon className="h-4 w-4 text-brand-light" />
+              <Icon className="h-4 w-4 shrink-0 text-brand-light" />
             </div>
             <p className="mt-3 text-2xl font-bold">{valor}</p>
           </Card>
@@ -105,7 +119,7 @@ export default async function AgendaPage({
 
       {rows.length === 0 ? (
         <Card>
-          <p className="text-sm text-muted">Nenhum agendamento neste dia.</p>
+          <p className="text-sm text-muted">Nenhum agendamento no período.</p>
         </Card>
       ) : (
         <div className="space-y-6">
@@ -121,8 +135,8 @@ export default async function AgendaPage({
                       key={item.id}
                       className="flex flex-wrap items-center gap-x-4 gap-y-2 p-4"
                     >
-                      <span className="w-14 shrink-0 font-semibold tabular-nums">
-                        {horaSP(item.dataHora)}
+                      <span className="shrink-0 text-sm font-semibold tabular-nums text-muted">
+                        {dataHoraSP(item.dataHora)}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium">{item.clienteNome}</p>
