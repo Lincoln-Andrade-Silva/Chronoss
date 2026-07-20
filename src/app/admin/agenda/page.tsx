@@ -28,6 +28,7 @@ export default async function AgendaPage({
     db
       .select({
         id: agendamentos.id,
+        grupoId: agendamentos.grupoId,
         dataHora: agendamentos.dataHora,
         status: agendamentos.status,
         tipo: agendamentos.tipo,
@@ -72,6 +73,7 @@ export default async function AgendaPage({
 
   const items: AgendaItem[] = rowsBarbeiro.map((r) => ({
     id: r.id,
+    grupoId: r.grupoId,
     dataHoraISO: r.dataHora.toISOString(),
     status: r.status,
     tipo: r.tipo,

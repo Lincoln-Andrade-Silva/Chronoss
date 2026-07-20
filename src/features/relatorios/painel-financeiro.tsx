@@ -1,9 +1,10 @@
 import { and, eq, gte, lt } from "drizzle-orm";
 import { DollarSign, Receipt, Repeat, Scissors, ShoppingBag } from "lucide-react";
 import { db } from "@/db";
-import { agendamentos, assinaturas, barbeiros, planos, produtos, vendasProdutos } from "@/db/schema";
+import { agendamentos, assinaturas, barbeiros, planos, produtos, servicos, vendasProdutos } from "@/db/schema";
 import { formatBRL } from "@/lib/format";
 import { diaCurto, gerarDias, spYmd } from "./datas";
+import { RankingExpansivel } from "./ranking-expansivel";
 import { GraficoBarras, KpiGrid, Ranking, Secao, Tabela } from "./ui";
 
 export async function PainelFinanceiro({
@@ -22,9 +23,11 @@ export async function PainelFinanceiro({
         barbeiroId: agendamentos.barbeiroId,
         barbeiroNome: barbeiros.nome,
         barbeiroFoto: barbeiros.fotoUrl,
+        servicoNome: servicos.nome,
       })
       .from(agendamentos)
       .innerJoin(barbeiros, eq(agendamentos.barbeiroId, barbeiros.id))
+      .innerJoin(servicos, eq(agendamentos.servicoId, servicos.id))
       .where(
         and(
           eq(agendamentos.status, "finalizado"),
@@ -57,14 +60,36 @@ export async function PainelFinanceiro({
   for (const v of vendas) prod.set(spYmd(v.dataHora), (prod.get(spYmd(v.dataHora)) ?? 0) + Number(v.total));
   const serie = dias.map((dia) => ({ dia, valor: (serv.get(dia) ?? 0) + (prod.get(dia) ?? 0) }));
 
-  const porBarbeiro = new Map<string, { nome: string; foto: string | null; fat: number }>();
+  const porBarbeiro = new Map<
+    string,
+    { id: string; nome: string; foto: string | null; fat: number; servicos: Map<string, { qtd: number; valor: number }> }
+  >();
   for (const r of finalizados) {
-    const b = porBarbeiro.get(r.barbeiroId) ?? { nome: r.barbeiroNome, foto: r.barbeiroFoto, fat: 0 };
+    const b =
+      porBarbeiro.get(r.barbeiroId) ??
+      { id: r.barbeiroId, nome: r.barbeiroNome, foto: r.barbeiroFoto, fat: 0, servicos: new Map() };
     b.fat += Number(r.valor);
+    const sv = b.servicos.get(r.servicoNome) ?? { qtd: 0, valor: 0 };
+    sv.qtd += 1;
+    sv.valor += Number(r.valor);
+    b.servicos.set(r.servicoNome, sv);
     porBarbeiro.set(r.barbeiroId, b);
   }
-  const barbeirosRank = [...porBarbeiro.values()].sort((a, b) => b.fat - a.fat);
-  const maxBarbeiro = Math.max(1, ...barbeirosRank.map((v) => v.fat));
+  const maxBarbeiro = Math.max(1, ...[...porBarbeiro.values()].map((v) => v.fat));
+  const barbeirosItens = [...porBarbeiro.values()]
+    .sort((a, b) => b.fat - a.fat)
+    .map((b) => ({
+      id: b.id,
+      nome: b.nome,
+      foto: b.foto,
+      destaque: formatBRL(b.fat),
+      proporcao: (b.fat / maxBarbeiro) * 100,
+      colValor: "Valor",
+      linhas: [...b.servicos.entries()]
+        .sort((a, c) => c[1].valor - a[1].valor)
+        .map(([nome, v]) => ({ nome, qtd: v.qtd, valor: formatBRL(v.valor) })),
+      totalValor: formatBRL(b.fat),
+    }));
 
   const maxComposicao = Math.max(1, fatServicos, fatProdutos, recorrente);
 
@@ -101,15 +126,7 @@ export async function PainelFinanceiro({
         </Secao>
 
         <Secao titulo="Faturamento por profissional">
-          <Ranking
-            vazio="Nenhum atendimento no período."
-            itens={barbeirosRank.map((b) => ({
-              nome: b.nome,
-              avatarUrl: b.foto,
-              destaque: formatBRL(b.fat),
-              proporcao: (b.fat / maxBarbeiro) * 100,
-            }))}
-          />
+          <RankingExpansivel itens={barbeirosItens} vazio="Nenhum atendimento no período." />
         </Secao>
       </div>
 

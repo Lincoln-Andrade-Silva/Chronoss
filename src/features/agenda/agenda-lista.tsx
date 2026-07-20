@@ -16,6 +16,7 @@ type TipoAcao = "finalizar" | "cancelar" | "excluir";
 
 export interface AgendaItem {
   id: string;
+  grupoId: string | null;
   dataHoraISO: string;
   status: StatusAg;
   tipo: "avulso" | "plano";
@@ -26,53 +27,21 @@ export interface AgendaItem {
   duracaoMinutos: number;
 }
 
-interface Posicionado {
-  item: AgendaItem;
+interface Bloco {
+  id: string;
   inicio: number;
   fim: number;
-  col: number;
-  colunas: number;
+  status: StatusAg;
+  clienteNome: string;
+  temPlano: boolean;
+  valorTotal: number;
+  servicos: { nome: string; valor: string; inicio: number; fim: number }[];
 }
 
-/** Distribui em colunas lado a lado os atendimentos com horários sobrepostos. */
-function posicionar(items: AgendaItem[]): Posicionado[] {
-  const eventos: Posicionado[] = items
-    .map((item) => {
-      const inicio = minutosDoDia(item.dataHoraISO);
-      return { item, inicio, fim: inicio + item.duracaoMinutos, col: 0, colunas: 1 };
-    })
-    .sort((a, b) => a.inicio - b.inicio || a.fim - b.fim);
-
-  let grupo: Posicionado[] = [];
-  let fimGrupo = -Infinity;
-
-  const fecharGrupo = () => {
-    const fimPorColuna: number[] = [];
-    for (const ev of grupo) {
-      let coluna = fimPorColuna.findIndex((fim) => fim <= ev.inicio);
-      if (coluna === -1) {
-        coluna = fimPorColuna.length;
-        fimPorColuna.push(ev.fim);
-      } else {
-        fimPorColuna[coluna] = ev.fim;
-      }
-      ev.col = coluna;
-    }
-    for (const ev of grupo) ev.colunas = fimPorColuna.length;
-  };
-
-  for (const ev of eventos) {
-    if (grupo.length && ev.inicio >= fimGrupo) {
-      fecharGrupo();
-      grupo = [];
-      fimGrupo = -Infinity;
-    }
-    grupo.push(ev);
-    fimGrupo = Math.max(fimGrupo, ev.fim);
-  }
-  if (grupo.length) fecharGrupo();
-
-  return eventos;
+interface Posicionado {
+  bloco: Bloco;
+  col: number;
+  colunas: number;
 }
 
 const PX_HORA = 104;
@@ -92,6 +61,77 @@ function hhmm(min: number): string {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/** Agrupa serviços da mesma marcação (grupoId) num bloco só. */
+function montarBlocos(items: AgendaItem[]): Bloco[] {
+  const ordenados = [...items].sort(
+    (a, b) => minutosDoDia(a.dataHoraISO) - minutosDoDia(b.dataHoraISO),
+  );
+  const mapa = new Map<string, Bloco>();
+  for (const item of ordenados) {
+    const chave = item.grupoId ?? item.id;
+    const inicio = minutosDoDia(item.dataHoraISO);
+    const fim = inicio + item.duracaoMinutos;
+    const bloco = mapa.get(chave);
+    if (!bloco) {
+      mapa.set(chave, {
+        id: item.id,
+        inicio,
+        fim,
+        status: item.status,
+        clienteNome: item.clienteNome,
+        temPlano: item.tipo === "plano",
+        valorTotal: Number(item.valor),
+        servicos: [{ nome: item.servicoNome, valor: item.valor, inicio, fim }],
+      });
+    } else {
+      bloco.inicio = Math.min(bloco.inicio, inicio);
+      bloco.fim = Math.max(bloco.fim, fim);
+      bloco.temPlano = bloco.temPlano || item.tipo === "plano";
+      bloco.valorTotal += Number(item.valor);
+      bloco.servicos.push({ nome: item.servicoNome, valor: item.valor, inicio, fim });
+    }
+  }
+  return [...mapa.values()];
+}
+
+/** Distribui em colunas lado a lado os blocos com horários sobrepostos. */
+function posicionar(blocos: Bloco[]): Posicionado[] {
+  const eventos: Posicionado[] = blocos
+    .map((bloco) => ({ bloco, col: 0, colunas: 1 }))
+    .sort((a, b) => a.bloco.inicio - b.bloco.inicio || a.bloco.fim - b.bloco.fim);
+
+  let grupo: Posicionado[] = [];
+  let fimGrupo = -Infinity;
+
+  const fecharGrupo = () => {
+    const fimPorColuna: number[] = [];
+    for (const ev of grupo) {
+      let coluna = fimPorColuna.findIndex((fim) => fim <= ev.bloco.inicio);
+      if (coluna === -1) {
+        coluna = fimPorColuna.length;
+        fimPorColuna.push(ev.bloco.fim);
+      } else {
+        fimPorColuna[coluna] = ev.bloco.fim;
+      }
+      ev.col = coluna;
+    }
+    for (const ev of grupo) ev.colunas = fimPorColuna.length;
+  };
+
+  for (const ev of eventos) {
+    if (grupo.length && ev.bloco.inicio >= fimGrupo) {
+      fecharGrupo();
+      grupo = [];
+      fimGrupo = -Infinity;
+    }
+    grupo.push(ev);
+    fimGrupo = Math.max(fimGrupo, ev.bloco.fim);
+  }
+  if (grupo.length) fecharGrupo();
+
+  return eventos;
 }
 
 const bordaStatus: Record<StatusAg, string> = {
@@ -118,16 +158,16 @@ export function AgendaLista({
   barbeiroNome?: string;
   barbeiroFotoUrl?: string | null;
 }) {
-  const [acao, setAcao] = useState<{ item: AgendaItem; tipo: TipoAcao } | null>(null);
+  const [acao, setAcao] = useState<{ bloco: Bloco; tipo: TipoAcao } | null>(null);
   const [pending, startTransition] = useTransition();
 
   function confirmar() {
     if (!acao) return;
-    const { item, tipo } = acao;
+    const { bloco, tipo } = acao;
     startTransition(async () => {
-      if (tipo === "finalizar") await finalizarAgendamento(item.id);
-      else if (tipo === "cancelar") await cancelarAgendamentoAdmin(item.id);
-      else await excluirAgendamento(item.id);
+      if (tipo === "finalizar") await finalizarAgendamento(bloco.id);
+      else if (tipo === "cancelar") await cancelarAgendamentoAdmin(bloco.id);
+      else await excluirAgendamento(bloco.id);
       setAcao(null);
     });
   }
@@ -138,9 +178,10 @@ export function AgendaLista({
   const finalizados = items.filter((i) => i.status === "finalizado").length;
   const cancelados = items.filter((i) => i.status === "cancelado").length;
 
-  const posicionados = posicionar(items);
-  const minInicio = posicionados.length ? Math.min(...posicionados.map((p) => p.inicio)) : 8 * 60;
-  const maxFim = posicionados.length ? Math.max(...posicionados.map((p) => p.fim)) : 19 * 60;
+  const blocos = montarBlocos(items);
+  const posicionados = posicionar(blocos);
+  const minInicio = blocos.length ? Math.min(...blocos.map((b) => b.inicio)) : 8 * 60;
+  const maxFim = blocos.length ? Math.max(...blocos.map((b) => b.fim)) : 19 * 60;
   const inicioGrade = Math.floor(Math.min(8 * 60, minInicio) / 60) * 60;
   const fimGrade = Math.ceil(Math.max(19 * 60, maxFim) / 60) * 60;
   const alturaTotal = ((fimGrade - inicioGrade) / 60) * PX_HORA;
@@ -167,7 +208,7 @@ export function AgendaLista({
         <div className="min-w-0">
           {barbeiroNome && <p className="truncate font-semibold">{barbeiroNome}</p>}
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-            <span className="text-muted">{items.length} atend.</span>
+            <span className="text-muted">{blocos.length} atend.</span>
             <span className="text-brand-light">{pendentes} pendentes</span>
             <span className="text-emerald-400">{finalizados} finalizados</span>
             <span className="text-muted2">{cancelados} cancelados</span>
@@ -197,15 +238,16 @@ export function AgendaLista({
           )}
 
           <div className="absolute inset-y-0 left-14 right-2">
-            {posicionados.map(({ item, inicio, fim, col, colunas }) => {
-              const top = ((inicio - inicioGrade) / 60) * PX_HORA;
-              const altura = Math.max(((fim - inicio) / 60) * PX_HORA, 48);
+            {posicionados.map(({ bloco, col, colunas }) => {
+              const top = ((bloco.inicio - inicioGrade) / 60) * PX_HORA;
+              const altura = Math.max(((bloco.fim - bloco.inicio) / 60) * PX_HORA, 48);
+              const multi = bloco.servicos.length > 1;
               return (
                 <div
-                  key={item.id}
+                  key={bloco.id}
                   className={cn(
                     "absolute overflow-hidden rounded-lg border border-l-4 bg-surface px-2 py-1.5",
-                    bordaStatus[item.status],
+                    bordaStatus[bloco.status],
                   )}
                   style={{
                     top: top + 2,
@@ -217,26 +259,30 @@ export function AgendaLista({
                   <div className="flex items-start justify-between gap-1">
                     <div className="min-w-0 space-y-0.5">
                       <p className="flex items-center gap-1 text-xs font-semibold">
-                        <span className="truncate">{item.clienteNome}</span>
-                        {item.tipo === "plano" && (
+                        <span className="truncate">{bloco.clienteNome}</span>
+                        {bloco.temPlano && (
                           <Star className="h-3 w-3 shrink-0 fill-brand-light text-brand-light" />
                         )}
                       </p>
-                      <p className="truncate text-[11px] text-muted">
-                        {item.servicoNome} - {formatBRL(item.valor)}
-                      </p>
+                      {bloco.servicos.map((s, i) => (
+                        <p key={i} className="truncate text-[11px] text-muted">
+                          {multi && <span className="text-muted2">{hhmm(s.inicio)} </span>}
+                          {s.nome} - {formatBRL(s.valor)}
+                        </p>
+                      ))}
                       <p className="truncate text-[10px] text-muted2">
-                        {hhmm(inicio)} - {hhmm(fim)} · {fim - inicio}min
+                        {hhmm(bloco.inicio)} - {hhmm(bloco.fim)} · {bloco.fim - bloco.inicio}min
+                        {multi && <> · Total {formatBRL(bloco.valorTotal)}</>}
                       </p>
                     </div>
                     <div className="flex shrink-0 gap-1">
-                      {item.status === "agendado" && (
+                      {bloco.status === "agendado" && (
                         <>
                           <button
                             type="button"
                             title="Finalizar"
                             disabled={pending}
-                            onClick={() => setAcao({ item, tipo: "finalizar" })}
+                            onClick={() => setAcao({ bloco, tipo: "finalizar" })}
                             className={cn(acaoBtn, "hover:border-emerald-500/40 hover:text-emerald-400")}
                           >
                             <Check className="h-3.5 w-3.5" />
@@ -245,7 +291,7 @@ export function AgendaLista({
                             type="button"
                             title="Cancelar"
                             disabled={pending}
-                            onClick={() => setAcao({ item, tipo: "cancelar" })}
+                            onClick={() => setAcao({ bloco, tipo: "cancelar" })}
                             className={cn(acaoBtn, "hover:border-amber-500/40 hover:text-amber-400")}
                           >
                             <X className="h-3.5 w-3.5" />
@@ -256,7 +302,7 @@ export function AgendaLista({
                         type="button"
                         title="Excluir"
                         disabled={pending}
-                        onClick={() => setAcao({ item, tipo: "excluir" })}
+                        onClick={() => setAcao({ bloco, tipo: "excluir" })}
                         className={cn(acaoBtn, "hover:border-red-400 hover:text-red-400")}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -281,8 +327,9 @@ export function AgendaLista({
           acao ? (
             <>
               Deseja {textos?.verbo} o atendimento de{" "}
-              <strong className="text-ink">{acao.item.clienteNome}</strong> (
-              {acao.item.servicoNome}, {formatBRL(acao.item.valor)})?
+              <strong className="text-ink">{acao.bloco.clienteNome}</strong> (
+              {acao.bloco.servicos.map((s) => s.nome).join(", ")},{" "}
+              {formatBRL(acao.bloco.valorTotal)})?
             </>
           ) : null
         }

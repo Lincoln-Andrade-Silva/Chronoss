@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { barbeiros, produtos, profiles, vendasProdutos } from "@/db/schema";
 import { formatBRL } from "@/lib/format";
 import { diaCurto, gerarDias, spYmd } from "./datas";
+import { RankingExpansivel } from "./ranking-expansivel";
 import { GraficoBarras, KpiGrid, Ranking, Secao, Tabela } from "./ui";
 
 const LIMITE_DETALHE = 100;
@@ -52,14 +53,36 @@ export async function PainelProdutos({
   const produtosRank = [...porProduto.entries()].sort((a, b) => b[1].qtd - a[1].qtd);
   const maxProduto = Math.max(1, ...produtosRank.map(([, v]) => v.qtd));
 
-  const porBarbeiro = new Map<string, { nome: string; foto: string | null; total: number }>();
+  const porBarbeiro = new Map<
+    string,
+    { id: string; nome: string; foto: string | null; total: number; produtos: Map<string, { qtd: number; total: number }> }
+  >();
   for (const v of vendas) {
-    const b = porBarbeiro.get(v.barbeiroId) ?? { nome: v.barbeiroNome, foto: v.barbeiroFoto, total: 0 };
+    const b =
+      porBarbeiro.get(v.barbeiroId) ??
+      { id: v.barbeiroId, nome: v.barbeiroNome, foto: v.barbeiroFoto, total: 0, produtos: new Map() };
     b.total += Number(v.total);
+    const pr = b.produtos.get(v.produtoNome) ?? { qtd: 0, total: 0 };
+    pr.qtd += v.quantidade;
+    pr.total += Number(v.total);
+    b.produtos.set(v.produtoNome, pr);
     porBarbeiro.set(v.barbeiroId, b);
   }
-  const barbeirosRank = [...porBarbeiro.values()].sort((a, b) => b.total - a.total);
-  const maxBarbeiro = Math.max(1, ...barbeirosRank.map((v) => v.total));
+  const maxBarbeiro = Math.max(1, ...[...porBarbeiro.values()].map((v) => v.total));
+  const barbeirosItens = [...porBarbeiro.values()]
+    .sort((a, b) => b.total - a.total)
+    .map((b) => ({
+      id: b.id,
+      nome: b.nome,
+      foto: b.foto,
+      destaque: formatBRL(b.total),
+      proporcao: (b.total / maxBarbeiro) * 100,
+      colValor: "Total",
+      linhas: [...b.produtos.entries()]
+        .sort((a, c) => c[1].qtd - a[1].qtd)
+        .map(([nome, v]) => ({ nome, qtd: v.qtd, valor: formatBRL(v.total) })),
+      totalValor: formatBRL(b.total),
+    }));
 
   const detalhe = vendas.slice(0, LIMITE_DETALHE);
 
@@ -92,15 +115,7 @@ export async function PainelProdutos({
         </Secao>
 
         <Secao titulo="Vendas por profissional">
-          <Ranking
-            vazio="Nenhuma venda no período."
-            itens={barbeirosRank.map((b) => ({
-              nome: b.nome,
-              avatarUrl: b.foto,
-              destaque: formatBRL(b.total),
-              proporcao: (b.total / maxBarbeiro) * 100,
-            }))}
-          />
+          <RankingExpansivel itens={barbeirosItens} vazio="Nenhuma venda no período." />
         </Secao>
       </div>
 
