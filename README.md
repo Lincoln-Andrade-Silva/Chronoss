@@ -89,3 +89,5 @@ A marca exibida (login, sidebar, home) vem de `getBarbeariaNome()` (`src/lib/bar
 - [ ] **Fase 14**: Checklist de reuso do template
 
 > Menu do admin reorganizado em Visão geral (Dashboard, Relatórios), Operação (Agenda, Vendas, Assinaturas), Gestão (Barbeiros, Cadastros) e Sistema (Configurações).
+
+> Agendamento suporta **múltiplos serviços por marcação**: os serviços viram linhas sequenciais compartilhando um `grupo_id`; finalizar/cancelar/excluir agem no grupo.

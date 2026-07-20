@@ -106,6 +106,8 @@ export const agendamentos = pgTable("agendamentos", {
   clienteId: uuid("cliente_id").notNull(),
   barbeiroId: uuid("barbeiro_id").notNull(),
   servicoId: uuid("servico_id").notNull(),
+  // Agrupa vários serviços marcados numa mesma sessão (null = marcação avulsa de 1 serviço).
+  grupoId: uuid("grupo_id"),
   dataHora: timestamp("data_hora", { withTimezone: true }).notNull(),
   status: statusAgendamento("status").notNull().default("agendado"),
   tipo: tipoAgendamento("tipo").notNull().default("avulso"),
