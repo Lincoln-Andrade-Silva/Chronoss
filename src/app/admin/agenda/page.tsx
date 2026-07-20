@@ -7,6 +7,7 @@ import { instanteSlot } from "@/lib/disponibilidade";
 import { formatBRL } from "@/lib/format";
 import { DayNav } from "@/features/agenda/day-nav";
 import { BarberSelect } from "@/features/agenda/barber-select";
+import { NovoAtendimento } from "@/features/agenda/novo-atendimento";
 import { AgendaLista, type AgendaItem } from "@/features/agenda/agenda-lista";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export default async function AgendaPage({
   const inicioTs = instanteSlot(data, "00:00");
   const fimTs = new Date(inicioTs.getTime() + 24 * 60 * 60 * 1000);
 
-  const [rows, listaBarbeiros] = await Promise.all([
+  const [rows, listaBarbeiros, listaServicos, listaClientes] = await Promise.all([
     db
       .select({
         id: agendamentos.id,
@@ -34,13 +35,14 @@ export default async function AgendaPage({
         tipo: agendamentos.tipo,
         valor: agendamentos.valor,
         clienteNome: profiles.nome,
+        clienteAvulso: agendamentos.clienteAvulso,
         barbeiroId: agendamentos.barbeiroId,
         servicoNome: servicos.nome,
         duracaoMinutos: servicos.duracaoMinutos,
       })
       .from(agendamentos)
       .innerJoin(servicos, eq(agendamentos.servicoId, servicos.id))
-      .innerJoin(profiles, eq(agendamentos.clienteId, profiles.id))
+      .leftJoin(profiles, eq(agendamentos.clienteId, profiles.id))
       .where(and(gte(agendamentos.dataHora, inicioTs), lt(agendamentos.dataHora, fimTs)))
       .orderBy(asc(agendamentos.dataHora)),
     db
@@ -48,6 +50,16 @@ export default async function AgendaPage({
       .from(barbeiros)
       .where(eq(barbeiros.ativo, true))
       .orderBy(asc(barbeiros.nome)),
+    db
+      .select({ id: servicos.id, nome: servicos.nome, preco: servicos.preco, duracaoMinutos: servicos.duracaoMinutos })
+      .from(servicos)
+      .where(eq(servicos.ativo, true))
+      .orderBy(asc(servicos.nome)),
+    db
+      .select({ id: profiles.id, nome: profiles.nome })
+      .from(profiles)
+      .where(eq(profiles.tipo, "cliente"))
+      .orderBy(asc(profiles.nome)),
   ]);
 
   const barbeiroSel = searchParams.barbeiro ?? listaBarbeiros[0]?.id ?? "";
@@ -78,7 +90,7 @@ export default async function AgendaPage({
     status: r.status,
     tipo: r.tipo,
     valor: r.valor,
-    clienteNome: r.clienteNome,
+    clienteNome: r.clienteNome ?? r.clienteAvulso ?? "Sem cadastro",
     barbeiroId: r.barbeiroId,
     servicoNome: r.servicoNome,
     duracaoMinutos: r.duracaoMinutos,
@@ -95,6 +107,11 @@ export default async function AgendaPage({
             {listaBarbeiros.length > 0 && (
               <BarberSelect barbeiros={listaBarbeiros} atual={barbeiroSel} />
             )}
+            <NovoAtendimento
+              barbeiros={listaBarbeiros}
+              clientes={listaClientes}
+              servicos={listaServicos}
+            />
           </div>
         }
       />

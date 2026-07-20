@@ -103,7 +103,9 @@ export const tipoAgendamento = pgEnum("tipo_agendamento", ["avulso", "plano"]);
 
 export const agendamentos = pgTable("agendamentos", {
   id: uuid("id").primaryKey().defaultRandom(),
-  clienteId: uuid("cliente_id").notNull(),
+  // Null = atendimento avulso criado pelo admin para alguém sem cadastro (nome em clienteAvulso).
+  clienteId: uuid("cliente_id"),
+  clienteAvulso: text("cliente_avulso"),
   barbeiroId: uuid("barbeiro_id").notNull(),
   servicoId: uuid("servico_id").notNull(),
   // Agrupa vários serviços marcados numa mesma sessão (null = marcação avulsa de 1 serviço).
@@ -178,6 +180,7 @@ export const vendasProdutos = pgTable("vendas_produtos", {
   total: numeric("total", { precision: 10, scale: 2 }).notNull(),
   barbeiroId: uuid("barbeiro_id").notNull(),
   clienteId: uuid("cliente_id"),
+  clienteAvulso: text("cliente_avulso"),
   dataHora: timestamp("data_hora", { withTimezone: true }).notNull().defaultNow(),
 });
 

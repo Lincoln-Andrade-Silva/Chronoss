@@ -137,7 +137,7 @@ export function PlanoModal({
           {servicos.length === 0 ? (
             <p className="text-sm text-muted">Nenhum serviço cadastrado.</p>
           ) : (
-            <div className="space-y-2">
+            <div className="max-h-72 space-y-2 overflow-y-auto pr-0.5">
               {servicos.map((s) => {
                 const incluido = selecionados.has(s.id);
                 return (

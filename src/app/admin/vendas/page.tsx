@@ -55,6 +55,7 @@ export default async function VendasPage({
         barbeiroId: vendasProdutos.barbeiroId,
         barbeiroNome: barbeiros.nome,
         clienteNome: profiles.nome,
+        clienteAvulso: vendasProdutos.clienteAvulso,
       })
       .from(vendasProdutos)
       .innerJoin(produtos, eq(vendasProdutos.produtoId, produtos.id))
@@ -75,7 +76,7 @@ export default async function VendasPage({
     total: v.total,
     barbeiroId: v.barbeiroId,
     barbeiroNome: v.barbeiroNome,
-    clienteNome: v.clienteNome,
+    clienteNome: v.clienteNome ?? v.clienteAvulso,
   }));
 
   return (

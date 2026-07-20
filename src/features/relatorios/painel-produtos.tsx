@@ -24,6 +24,7 @@ export async function PainelProdutos({
       barbeiroNome: barbeiros.nome,
       barbeiroFoto: barbeiros.fotoUrl,
       clienteNome: profiles.nome,
+      clienteAvulso: vendasProdutos.clienteAvulso,
       quantidade: vendasProdutos.quantidade,
       total: vendasProdutos.total,
     })
@@ -127,7 +128,7 @@ export async function PainelProdutos({
             v.barbeiroNome,
             v.produtoNome,
             `${v.quantidade}x`,
-            v.clienteNome ?? "-",
+            v.clienteNome ?? v.clienteAvulso ?? "-",
             diaCurto(spYmd(v.dataHora)),
             formatBRL(v.total),
           ])}

@@ -31,6 +31,7 @@ export function VendaModal({
   const [quantidade, setQuantidade] = useState("1");
   const [barbeiroId, setBarbeiroId] = useState("");
   const [clienteId, setClienteId] = useState("");
+  const [clienteAvulso, setClienteAvulso] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -45,7 +46,13 @@ export function VendaModal({
     event.preventDefault();
     setErro(null);
     startTransition(async () => {
-      const res = await registrarVenda(produtoId, Number(quantidade), barbeiroId, clienteId || null);
+      const res = await registrarVenda(
+        produtoId,
+        Number(quantidade),
+        barbeiroId,
+        clienteId || null,
+        clienteAvulso,
+      );
       if (res.error) {
         setErro(res.error);
         return;
@@ -99,6 +106,14 @@ export function VendaModal({
               ...clientes.map((c) => ({ value: c.id, label: c.nome })),
             ]}
           />
+          {!clienteId && (
+            <Input
+              className="mt-2"
+              value={clienteAvulso}
+              onChange={(e) => setClienteAvulso(e.target.value)}
+              placeholder="Nome do cliente (opcional)"
+            />
+          )}
         </Field>
 
         {erro && <FormError>{erro}</FormError>}

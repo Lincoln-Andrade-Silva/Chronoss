@@ -93,7 +93,7 @@ export default async function AdminHome({
   const cancelados = atendimentos.filter((r) => r.status === "cancelado").length;
   const pendentes = atendimentos.filter((r) => r.status === "agendado").length;
   const taxaCancelamento = atendimentos.length > 0 ? (cancelados / atendimentos.length) * 100 : 0;
-  const clientesUnicos = new Set(finalizados.map((r) => r.clienteId)).size;
+  const clientesUnicos = new Set(finalizados.map((r) => r.clienteId).filter(Boolean)).size;
 
   const fatServicos = finalizados.reduce((s, r) => s + Number(r.valor), 0);
   const fatProdutos = vendas.reduce((s, r) => s + Number(r.total), 0);
