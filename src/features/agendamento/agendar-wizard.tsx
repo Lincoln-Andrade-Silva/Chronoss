@@ -2,12 +2,17 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronLeft, Clock, Scissors, Star } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, Clock, Scissors, Star } from "lucide-react";
 import { Button, Card, FormError } from "@/components/ui";
 import type { Barbeiro, Servico } from "@/db/schema";
 import { cn } from "@/lib/cn";
 import { formatBRL, formatDuracao } from "@/lib/format";
-import { criarAgendamento, getHorariosDisponiveis } from "./actions";
+import {
+  criarAgendamento,
+  getHorariosDisponiveis,
+  getPrecoAgendamento,
+  type PrecoAgendamento,
+} from "./actions";
 
 function ymd(date: Date): string {
   return date.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
@@ -52,6 +57,7 @@ export function AgendarWizard({
   const [data, setData] = useState<string>(PROXIMOS_DIAS[0]);
   const [hora, setHora] = useState<string | null>(null);
   const [slots, setSlots] = useState<string[]>([]);
+  const [preco, setPreco] = useState<PrecoAgendamento | null>(null);
   const [carregandoSlots, setCarregandoSlots] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
@@ -72,6 +78,18 @@ export function AgendarWizard({
       ativo = false;
     };
   }, [passo, barbeiro, servico, data]);
+
+  useEffect(() => {
+    if (passo !== 2 || !servico) return;
+    let ativo = true;
+    setPreco(null);
+    getPrecoAgendamento(servico.id, data).then((res) => {
+      if (ativo) setPreco(res);
+    });
+    return () => {
+      ativo = false;
+    };
+  }, [passo, servico, data]);
 
   function confirmar() {
     if (!servico || !barbeiro || !hora) return;
@@ -287,11 +305,18 @@ export function AgendarWizard({
 
           {erro && <FormError>{erro}</FormError>}
 
-          {servico && cobertos.has(servico.id) && (
-            <p className="flex items-center gap-1.5 text-xs text-muted">
-              <Star className="h-3.5 w-3.5 shrink-0 fill-brand-light text-brand-light" />
-              Grátis pelo seu plano nos dias cobertos; fora deles é cobrado o valor normal.
-            </p>
+          {servico && cobertos.has(servico.id) && preco && (
+            preco.coberto ? (
+              <p className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-400">
+                <Star className="h-3.5 w-3.5 shrink-0 fill-emerald-400 text-emerald-400" />
+                Grátis pelo seu plano neste dia.
+              </p>
+            ) : (
+              <p className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-400">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                Seu plano não cobre este serviço neste dia. Será cobrado {formatBRL(preco.valor)}.
+              </p>
+            )
           )}
 
           <Button
@@ -299,7 +324,11 @@ export function AgendarWizard({
             disabled={!hora || enviando}
             onClick={confirmar}
           >
-            {enviando ? "Confirmando..." : "Confirmar agendamento"}
+            {enviando
+              ? "Confirmando..."
+              : preco
+                ? `Confirmar agendamento - ${preco.coberto ? "Grátis" : formatBRL(preco.valor)}`
+                : "Confirmar agendamento"}
           </Button>
         </div>
       )}

@@ -68,6 +68,26 @@ export async function getHorariosDisponiveis(
   });
 }
 
+export interface PrecoAgendamento {
+  coberto: boolean;
+  valor: string;
+}
+
+/** Preço efetivo do serviço na data escolhida, considerando cobertura do plano do cliente. */
+export async function getPrecoAgendamento(
+  servicoId: string,
+  data: string,
+): Promise<PrecoAgendamento> {
+  const profile = await getCurrentProfile();
+
+  const [servico] = await db.select().from(servicos).where(eq(servicos.id, servicoId));
+  if (!servico) return { coberto: false, valor: "0" };
+
+  const inicio = instanteSlot(data, "12:00");
+  const coberto = await servicoCobertoPorPlano(profile.id, servicoId, data, inicio);
+  return { coberto, valor: coberto ? "0" : servico.preco };
+}
+
 export interface CriarAgendamentoResult {
   ok?: boolean;
   error?: string;
