@@ -196,11 +196,11 @@ export function AgendaLista({ items }: { items: AgendaItem[] }) {
                           <Star className="h-3 w-3 shrink-0 fill-brand-light text-brand-light" />
                         )}
                       </p>
-                      <p className="truncate text-[10px] text-muted2">
-                        {hhmm(inicio)} - {hhmm(fim)} · {fim - inicio}min
-                      </p>
                       <p className="truncate text-[11px] text-muted">
                         {item.servicoNome} - {formatBRL(item.valor)}
+                      </p>
+                      <p className="truncate text-[10px] text-muted2">
+                        {hhmm(inicio)} - {hhmm(fim)} · {fim - inicio}min
                       </p>
                     </div>
                     <div className="flex shrink-0 gap-1">
