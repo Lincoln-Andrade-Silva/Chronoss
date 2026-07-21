@@ -149,7 +149,7 @@ export default async function ClientHome() {
         </div>
 
         {(whatsappDigits || info?.instagramLink || info?.facebookLink) && (
-          <div className="flex flex-wrap gap-2 border-t border-line pt-4">
+          <div className="flex flex-wrap justify-center gap-2 border-t border-line pt-4">
             {whatsappDigits && (
               <a
                 href={`https://wa.me/${whatsappDigits}`}
