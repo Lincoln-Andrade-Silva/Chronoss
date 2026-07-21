@@ -19,11 +19,13 @@ export function PagamentoForm({
   publicKey,
   webhookSecret,
   siteUrl,
+  taxaCartao,
 }: {
   accessToken: string | null;
   publicKey: string | null;
   webhookSecret: string | null;
   siteUrl: string | null;
+  taxaCartao: string;
 }) {
   const [state, formAction] = useFormState<PagamentoFormState, FormData>(
     salvarIntegracaoPagamento,
@@ -77,6 +79,25 @@ export function PagamentoForm({
           defaultValue={publicKey ?? ""}
           placeholder="APP_USR-... ou TEST-..."
         />
+      </Field>
+
+      <Field label="Taxa do cartão (%)" htmlFor="pg-taxa">
+        <Input
+          id="pg-taxa"
+          name="taxaCartao"
+          type="number"
+          min={0}
+          max={100}
+          step="0.01"
+          inputMode="decimal"
+          defaultValue={taxaCartao}
+          placeholder="3.03"
+        />
+        <p className="mt-1 text-xs text-muted2">
+          Percentual que o Mercado Pago retém por cobrança no cartão. Usado para mostrar o valor
+          líquido dos planos. O valor exato depende do seu prazo de recebimento (confira em Seu
+          negócio → Taxas e Parcelas → Checkout).
+        </p>
       </Field>
 
       <Field label="Segredo do webhook (opcional)" htmlFor="pg-webhook">

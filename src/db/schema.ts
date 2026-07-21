@@ -66,6 +66,8 @@ export const integracoesPagamento = pgTable("integracoes_pagamento", {
   webhookSecret: text("webhook_secret"),
   // URL pública base do site (checkout/webhook). Ex: https://seudominio.com
   siteUrl: text("site_url"),
+  // Taxa (%) que o gateway retém por venda no cartão. Usada para exibir o líquido dos planos.
+  taxaCartao: numeric("taxa_cartao", { precision: 5, scale: 2 }).notNull().default("3.03"),
   atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 
