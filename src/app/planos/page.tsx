@@ -48,7 +48,8 @@ export default async function PlanosPage() {
       <div className="mb-6 flex items-start gap-2 rounded-lg border border-brand/30 bg-brand/10 p-3">
         <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-brand-light" />
         <p className="text-xs text-muted">
-          A cobrança é <strong className="text-ink">mensal e recorrente</strong> no cartão: renova
+          A cobrança é <strong className="text-ink">mensal e recorrente</strong> no cartão,
+          processada com segurança pelo <strong className="text-ink">Mercado Pago</strong>: renova
           automaticamente todo mês até você cancelar. Para cancelar, acesse{" "}
           <Link href="/minhas-assinaturas" className="font-semibold text-brand-light underline">
             Minhas assinaturas

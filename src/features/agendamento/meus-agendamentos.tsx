@@ -2,13 +2,13 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { CalendarPlus, Clock, Star, X } from "lucide-react";
+import { AlertTriangle, CalendarPlus, Clock, CreditCard, Star, X } from "lucide-react";
 import { Badge, Button, ConfirmModal } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatBRL } from "@/lib/format";
-import { cancelarAgendamento } from "./actions";
+import { cancelarAgendamento, retomarPagamentoAgendamento } from "./actions";
 
-type StatusAg = "agendado" | "finalizado" | "cancelado";
+type StatusAg = "agendado" | "finalizado" | "cancelado" | "estornado";
 type Tipo = "avulso" | "plano";
 
 interface AgendamentoItem {
@@ -18,6 +18,7 @@ interface AgendamentoItem {
   status: StatusAg;
   tipo: Tipo;
   valor: string;
+  pagamentoStatus: string;
   servicoNome: string;
   barbeiroNome: string;
   barbeiroFoto: string | null;
@@ -27,6 +28,7 @@ interface Marcacao {
   id: string;
   dataHoraISO: string;
   status: StatusAg;
+  pagamentoStatus: string;
   barbeiroNome: string;
   barbeiroFoto: string | null;
   temPlano: boolean;
@@ -47,6 +49,7 @@ function montarMarcacoes(items: AgendamentoItem[]): Marcacao[] {
         id: item.id,
         dataHoraISO: item.dataHoraISO,
         status: item.status,
+        pagamentoStatus: item.pagamentoStatus,
         barbeiroNome: item.barbeiroNome,
         barbeiroFoto: item.barbeiroFoto,
         temPlano: item.tipo === "plano",
@@ -81,6 +84,7 @@ function resumoData(iso: string): string {
 function StatusBadge({ status }: { status: StatusAg }) {
   if (status === "agendado") return <Badge tone="brand">Agendado</Badge>;
   if (status === "finalizado") return <Badge tone="success">Finalizado</Badge>;
+  if (status === "estornado") return <Badge tone="muted">Estornado</Badge>;
   return <Badge tone="muted">Cancelado</Badge>;
 }
 
@@ -98,10 +102,26 @@ function Avatar({ url, nome }: { url: string | null; nome: string }) {
   );
 }
 
-function Cartao({ marcacao, onCancelar }: { marcacao: Marcacao; onCancelar?: () => void }) {
+function Cartao({
+  marcacao,
+  onCancelar,
+  onPagar,
+  pagando,
+}: {
+  marcacao: Marcacao;
+  onCancelar?: () => void;
+  onPagar?: () => void;
+  pagando?: boolean;
+}) {
   const p = partesData(marcacao.dataHoraISO);
+  const aguardandoPgto = marcacao.status === "agendado" && marcacao.pagamentoStatus === "pendente";
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-panel">
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border bg-panel",
+        aguardandoPgto ? "border-amber-500/40" : "border-line",
+      )}
+    >
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="flex flex-col items-center rounded-lg bg-surface px-3 py-1.5 leading-none">
@@ -157,6 +177,36 @@ function Cartao({ marcacao, onCancelar }: { marcacao: Marcacao; onCancelar?: () 
           </span>
         </div>
 
+        {marcacao.pagamentoStatus === "pago" && (
+          <p className="mt-1.5 text-right text-[11px] font-medium text-emerald-400">
+            Pago via Mercado Pago
+          </p>
+        )}
+        {marcacao.pagamentoStatus === "estornado" && (
+          <p className="mt-1.5 text-right text-[11px] font-medium text-amber-400">
+            Pagamento estornado
+          </p>
+        )}
+
+        {aguardandoPgto && (
+          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-300">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Aguardando pagamento
+            </p>
+            <p className="mt-0.5 text-[11px] text-amber-200/80">
+              Você ainda não concluiu o pagamento no Mercado Pago. Pague para garantir o horário ou
+              cancele.
+            </p>
+            {onPagar && (
+              <Button className="mt-2.5 h-9 w-full text-sm" disabled={pagando} onClick={onPagar}>
+                <CreditCard className="h-4 w-4" />
+                {pagando ? "Abrindo..." : `Pagar ${formatBRL(marcacao.valorTotal)} agora`}
+              </Button>
+            )}
+          </div>
+        )}
+
         {onCancelar && (
           <button
             type="button"
@@ -174,6 +224,7 @@ function Cartao({ marcacao, onCancelar }: { marcacao: Marcacao; onCancelar?: () 
 
 export function MeusAgendamentos({ items }: { items: AgendamentoItem[] }) {
   const [cancelar, setCancelar] = useState<Marcacao | null>(null);
+  const [pagandoId, setPagandoId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const agora = Date.now();
 
@@ -189,6 +240,15 @@ export function MeusAgendamentos({ items }: { items: AgendamentoItem[] }) {
     startTransition(async () => {
       await cancelarAgendamento(id);
       setCancelar(null);
+    });
+  }
+
+  function pagar(id: string) {
+    setPagandoId(id);
+    startTransition(async () => {
+      const res = await retomarPagamentoAgendamento(id);
+      // Sucesso redireciona ao checkout; só volta aqui em erro.
+      if (res?.error) setPagandoId(null);
     });
   }
 
@@ -216,7 +276,13 @@ export function MeusAgendamentos({ items }: { items: AgendamentoItem[] }) {
         ) : (
           <div className="space-y-3">
             {proximos.map((m) => (
-              <Cartao key={m.id} marcacao={m} onCancelar={() => setCancelar(m)} />
+              <Cartao
+                key={m.id}
+                marcacao={m}
+                onCancelar={() => setCancelar(m)}
+                onPagar={m.pagamentoStatus === "pendente" ? () => pagar(m.id) : undefined}
+                pagando={pagandoId === m.id}
+              />
             ))}
           </div>
         )}

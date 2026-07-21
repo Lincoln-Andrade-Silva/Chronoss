@@ -1,18 +1,24 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { and, eq, gte, inArray, lt, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { agendamentos, expediente, servicos } from "@/db/schema";
 import { getCurrentProfile } from "@/lib/auth";
 import { getEstabelecimentoInfo } from "@/lib/estabelecimento";
+import { getBaseUrl } from "@/lib/pagamento";
+import { criarPreferencia } from "@/lib/mercadopago";
 import { servicoCobertoPorPlano } from "@/lib/plano";
+import { estornarAgendamento } from "./pagamento";
 import { normalizarHorario } from "@/features/estabelecimento/horario";
 import {
   gerarHorariosDisponiveis,
   instanteSlot,
   type IntervaloOcupado,
 } from "@/lib/disponibilidade";
+
+export type FormaPagamento = "presencial" | "online";
 
 const PASSO_MINUTOS = 30;
 
@@ -134,6 +140,7 @@ export async function criarAgendamento(
   servicoIds: string[],
   data: string,
   hora: string,
+  formaPagamento: FormaPagamento = "presencial",
 ): Promise<CriarAgendamentoResult> {
   const profile = await getCurrentProfile();
 
@@ -161,9 +168,11 @@ export async function criarAgendamento(
   const grupoId = servicosOrdenados.length > 1 ? crypto.randomUUID() : null;
   const linhas = [];
   let offset = 0;
+  let totalPagavel = 0;
   for (const servico of servicosOrdenados) {
     const inicio = new Date(inicioBloco.getTime() + offset * 60_000);
     const coberto = await servicoCobertoPorPlano(profile.id, servico.id, data, inicio);
+    if (!coberto) totalPagavel += Number(servico.preco);
     linhas.push({
       clienteId: profile.id,
       barbeiroId,
@@ -177,8 +186,17 @@ export async function criarAgendamento(
     offset += servico.duracaoMinutos;
   }
 
+  // Só cobra online se o cliente escolheu e há valor a pagar (plano cobre = grátis).
+  const online = formaPagamento === "online" && totalPagavel > 0;
+  const linhasComPagamento = linhas.map((l) => ({
+    ...l,
+    formaPagamento: online ? ("online" as const) : ("presencial" as const),
+    pagamentoStatus: online ? ("pendente" as const) : ("a_receber" as const),
+  }));
+
+  let ids: { id: string }[];
   try {
-    await db.insert(agendamentos).values(linhas);
+    ids = await db.insert(agendamentos).values(linhasComPagamento).returning({ id: agendamentos.id });
   } catch (err) {
     console.error("Falha ao criar agendamento:", err);
     return { error: "Não foi possível agendar. Tente novamente." };
@@ -186,7 +204,70 @@ export async function criarAgendamento(
 
   revalidatePath("/agendar");
   revalidatePath("/meus-agendamentos");
-  return { ok: true };
+  revalidatePath("/admin/agenda");
+
+  if (!online) return { ok: true };
+
+  // Pagamento online: reserva o horário (linhas já inseridas) e leva ao checkout do MP.
+  const refKey = grupoId ?? ids[0].id;
+  let initPoint: string;
+  try {
+    const pref = await criarPreferencia({
+      titulo: servicosOrdenados.map((s) => s.nome).join(" + "),
+      valor: totalPagavel,
+      payerEmail: profile.email,
+      externalReference: `${profile.id}:${refKey}`,
+      baseUrl: await getBaseUrl(),
+    });
+    initPoint = pref.initPoint;
+  } catch (e) {
+    // Falhou criar o checkout: desfaz a reserva para não travar o horário.
+    await db.delete(agendamentos).where(inArray(agendamentos.id, ids.map((r) => r.id)));
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("Falha ao criar checkout do agendamento:", msg);
+    return { error: `Não foi possível iniciar o pagamento. ${msg}`.slice(0, 300) };
+  }
+
+  redirect(initPoint);
+}
+
+/** Retoma o checkout de um agendamento online cujo pagamento ficou pendente (checkout abandonado). */
+export async function retomarPagamentoAgendamento(id: string): Promise<CriarAgendamentoResult> {
+  const profile = await getCurrentProfile();
+
+  const [ag] = await db.select().from(agendamentos).where(eq(agendamentos.id, id));
+  if (!ag || ag.clienteId !== profile.id) return { error: "Agendamento não encontrado." };
+  if (ag.formaPagamento !== "online" || ag.pagamentoStatus !== "pendente") {
+    return { error: "Este agendamento não está aguardando pagamento." };
+  }
+
+  const linhas = await db
+    .select({ valor: agendamentos.valor, servicoNome: servicos.nome })
+    .from(agendamentos)
+    .innerJoin(servicos, eq(agendamentos.servicoId, servicos.id))
+    .where(ag.grupoId ? eq(agendamentos.grupoId, ag.grupoId) : eq(agendamentos.id, id));
+
+  const total = linhas.reduce((soma, l) => soma + Number(l.valor), 0);
+  if (total <= 0) return { error: "Não há valor a pagar." };
+
+  const refKey = ag.grupoId ?? ag.id;
+  let initPoint: string;
+  try {
+    const pref = await criarPreferencia({
+      titulo: linhas.map((l) => l.servicoNome).join(" + "),
+      valor: total,
+      payerEmail: profile.email,
+      externalReference: `${profile.id}:${refKey}`,
+      baseUrl: await getBaseUrl(),
+    });
+    initPoint = pref.initPoint;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("Falha ao retomar pagamento:", msg);
+    return { error: `Não foi possível abrir o pagamento. ${msg}`.slice(0, 300) };
+  }
+
+  redirect(initPoint);
 }
 
 export async function cancelarAgendamento(id: string): Promise<CriarAgendamentoResult> {
@@ -203,11 +284,26 @@ export async function cancelarAgendamento(id: string): Promise<CriarAgendamentoR
     return { error: "Não é possível cancelar um horário que já passou." };
   }
 
-  // Cancela a marcação inteira (todos os serviços do grupo, se houver).
-  await db
-    .update(agendamentos)
-    .set({ status: "cancelado" })
+  // Ids de toda a marcação (grupo, se houver).
+  const linhas = await db
+    .select({ id: agendamentos.id })
+    .from(agendamentos)
     .where(ag.grupoId ? eq(agendamentos.grupoId, ag.grupoId) : eq(agendamentos.id, id));
+  const ids = linhas.map((l) => l.id);
+
+  // Pago online: estorna no MP e marca como estornado. Caso contrário, cancela normal.
+  if (ag.pagamentoStatus === "pago") {
+    try {
+      await estornarAgendamento(ids);
+    } catch (e) {
+      console.error("Falha ao estornar no cancelamento:", e);
+      return { error: "Não foi possível estornar o pagamento agora. Tente novamente." };
+    }
+  } else {
+    await db.update(agendamentos).set({ status: "cancelado" }).where(inArray(agendamentos.id, ids));
+  }
+
   revalidatePath("/meus-agendamentos");
+  revalidatePath("/admin/agenda");
   return { ok: true };
 }

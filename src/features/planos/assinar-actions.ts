@@ -1,24 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { assinaturas, planos } from "@/db/schema";
 import { getCurrentProfile } from "@/lib/auth";
-import { getIntegracaoPagamento } from "@/lib/pagamento";
+import { getBaseUrl } from "@/lib/pagamento";
 import { cancelarPreapproval, criarPreapproval } from "@/lib/mercadopago";
-
-async function baseUrl(): Promise<string> {
-  const cfg = await getIntegracaoPagamento();
-  if (cfg?.siteUrl) return cfg.siteUrl;
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
-  const h = headers();
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  const host = h.get("host") ?? "localhost:3000";
-  return `${proto}://${host}`;
-}
 
 export interface AssinarResult {
   error?: string;
@@ -50,7 +39,7 @@ export async function assinarPlano(planoId: string): Promise<AssinarResult> {
       valor: Number(plano.valor),
       payerEmail: profile.email,
       externalReference: `${profile.id}:${plano.id}`,
-      baseUrl: await baseUrl(),
+      baseUrl: await getBaseUrl(),
     });
     initPoint = pre.initPoint;
   } catch (e) {

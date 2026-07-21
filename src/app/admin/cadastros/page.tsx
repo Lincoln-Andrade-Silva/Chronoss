@@ -125,12 +125,18 @@ export default async function CadastrosPage({
     if (status === "inativos") cond.push(eq(servicos.ativo, false));
     const where = cond.length ? and(...cond) : undefined;
 
-    const [total, rows] = await Promise.all([
+    const [total, rows, cfgPagamento] = await Promise.all([
       db.select({ n: count() }).from(servicos).where(where),
       db.select().from(servicos).where(where).orderBy(asc(servicos.nome)).limit(PAGE_SIZE).offset(offset),
+      getIntegracaoPagamento(),
     ]);
     conteudo = (
-      <ServicosClient servicos={rows} page={pagina} pageCount={totalPaginas(total[0]?.n ?? 0)} />
+      <ServicosClient
+        servicos={rows}
+        taxaCartao={Number(cfgPagamento?.taxaCartao ?? "3.03")}
+        page={pagina}
+        pageCount={totalPaginas(total[0]?.n ?? 0)}
+      />
     );
   }
 

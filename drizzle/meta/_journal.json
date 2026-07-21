@@ -218,6 +218,13 @@
       "when": 1784638061019,
       "tag": "0030_integracoes_taxa_cartao",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1784639682472,
+      "tag": "0031_agendamento_pagamento",
+      "breakpoints": true
     }
   ]
 }

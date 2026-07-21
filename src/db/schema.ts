@@ -115,6 +115,8 @@ export const statusAgendamento = pgEnum("status_agendamento", [
   "agendado",
   "finalizado",
   "cancelado",
+  // Dinheiro devolvido: online estornado no gateway ou presencial devolvido em mãos. Não gera receita.
+  "estornado",
 ]);
 export const tipoAgendamento = pgEnum("tipo_agendamento", ["avulso", "plano"]);
 
@@ -131,6 +133,13 @@ export const agendamentos = pgTable("agendamentos", {
   status: statusAgendamento("status").notNull().default("agendado"),
   tipo: tipoAgendamento("tipo").notNull().default("avulso"),
   valor: numeric("valor", { precision: 10, scale: 2 }).notNull().default("0"),
+  // Como o cliente paga: "presencial" (na hora) ou "online" (cartão via Mercado Pago).
+  formaPagamento: text("forma_pagamento").notNull().default("presencial"),
+  // Situação do pagamento: "a_receber" (presencial pendente), "pendente" (checkout iniciado),
+  // "pago" (aprovado no gateway) ou "estornado" (devolvido).
+  pagamentoStatus: text("pagamento_status").notNull().default("a_receber"),
+  // Id do pagamento no Mercado Pago (necessário para estorno). Null quando presencial.
+  gatewayPagamentoId: text("gateway_pagamento_id"),
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 
