@@ -7,6 +7,7 @@ import { agendamentos, servicos } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { instanteSlot } from "@/lib/disponibilidade";
 import { servicoCobertoPorPlano } from "@/lib/plano";
+import { estornarAgendamento } from "@/features/agendamento/pagamento";
 
 /** Ids do agendamento e, se fizer parte de um grupo (multi-serviço), de todo o grupo. */
 async function idsAlvo(id: string): Promise<string[]> {
@@ -23,28 +24,78 @@ async function idsAlvo(id: string): Promise<string[]> {
   return linhas.map((l) => l.id);
 }
 
-export async function finalizarAgendamento(id: string): Promise<void> {
+export async function finalizarAgendamento(id: string): Promise<{ error?: string }> {
   await requireAdmin();
   const ids = await idsAlvo(id);
-  if (ids.length === 0) return;
+  if (ids.length === 0) return {};
+
+  // Não finaliza enquanto o pagamento online não foi concluído.
+  const linhas = await db
+    .select({ formaPagamento: agendamentos.formaPagamento, pagamentoStatus: agendamentos.pagamentoStatus })
+    .from(agendamentos)
+    .where(inArray(agendamentos.id, ids));
+  const aguardando = linhas.some(
+    (l) => l.formaPagamento === "online" && l.pagamentoStatus === "pendente",
+  );
+  if (aguardando) {
+    return { error: "Pagamento online pendente: conclua o pagamento ou cancele o agendamento." };
+  }
+
   await db.update(agendamentos).set({ status: "finalizado" }).where(inArray(agendamentos.id, ids));
   revalidatePath("/admin/agenda");
+  return {};
 }
 
-export async function cancelarAgendamentoAdmin(id: string): Promise<void> {
+export async function cancelarAgendamentoAdmin(id: string): Promise<{ error?: string }> {
   await requireAdmin();
   const ids = await idsAlvo(id);
-  if (ids.length === 0) return;
-  await db.update(agendamentos).set({ status: "cancelado" }).where(inArray(agendamentos.id, ids));
+  if (ids.length === 0) return {};
+
+  const [ag] = await db
+    .select({ pagamentoStatus: agendamentos.pagamentoStatus })
+    .from(agendamentos)
+    .where(eq(agendamentos.id, id));
+
+  // Se foi pago online, cancelar implica estornar: reflete como estornado.
+  if (ag?.pagamentoStatus === "pago") {
+    try {
+      await estornarAgendamento(ids);
+    } catch (e) {
+      console.error("Falha ao estornar no cancelamento (admin):", e);
+      return { error: "Não foi possível estornar o pagamento. Tente novamente." };
+    }
+  } else {
+    await db.update(agendamentos).set({ status: "cancelado" }).where(inArray(agendamentos.id, ids));
+  }
   revalidatePath("/admin/agenda");
+  return {};
 }
 
-export async function excluirAgendamento(id: string): Promise<void> {
+/**
+ * Estorna um atendimento: online chama o refund do MP; presencial só registra a
+ * devolução. Serve para devolver dinheiro de um atendimento já finalizado ou pago.
+ */
+export async function estornarAgendamentoAdmin(id: string): Promise<{ error?: string }> {
   await requireAdmin();
   const ids = await idsAlvo(id);
-  if (ids.length === 0) return;
+  if (ids.length === 0) return {};
+  try {
+    await estornarAgendamento(ids);
+  } catch (e) {
+    console.error("Falha ao estornar atendimento:", e);
+    return { error: "Não foi possível estornar no Mercado Pago. Tente novamente." };
+  }
+  revalidatePath("/admin/agenda");
+  return {};
+}
+
+export async function excluirAgendamento(id: string): Promise<{ error?: string }> {
+  await requireAdmin();
+  const ids = await idsAlvo(id);
+  if (ids.length === 0) return {};
   await db.delete(agendamentos).where(inArray(agendamentos.id, ids));
   revalidatePath("/admin/agenda");
+  return {};
 }
 
 export interface NovoAtendimentoResult {

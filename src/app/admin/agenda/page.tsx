@@ -1,5 +1,5 @@
 import { and, asc, eq, gte, lt } from "drizzle-orm";
-import { Ban, CalendarCheck, CheckCircle2, DollarSign } from "lucide-react";
+import { Ban, CalendarCheck, CheckCircle2, DollarSign, CreditCard, Hourglass } from "lucide-react";
 import { db } from "@/db";
 import { agendamentos, barbeiros, profiles, servicos } from "@/db/schema";
 import { Card, PageHeader } from "@/components/ui";
@@ -34,6 +34,8 @@ export default async function AgendaPage({
         status: agendamentos.status,
         tipo: agendamentos.tipo,
         valor: agendamentos.valor,
+        formaPagamento: agendamentos.formaPagamento,
+        pagamentoStatus: agendamentos.pagamentoStatus,
         clienteNome: profiles.nome,
         clienteAvulso: agendamentos.clienteAvulso,
         barbeiroId: agendamentos.barbeiroId,
@@ -65,20 +67,32 @@ export default async function AgendaPage({
   const barbeiroSel = searchParams.barbeiro ?? listaBarbeiros[0]?.id ?? "";
   const rowsBarbeiro = rows.filter((r) => r.barbeiroId === barbeiroSel);
 
-  const validos = rowsBarbeiro.filter((r) => r.status !== "cancelado");
+  // Estornado e cancelado não geram receita.
+  const validos = rowsBarbeiro.filter((r) => r.status !== "cancelado" && r.status !== "estornado");
   const finalizados = rowsBarbeiro.filter((r) => r.status === "finalizado");
-  const cancelados = rowsBarbeiro.filter((r) => r.status === "cancelado");
+  const encerrados = rowsBarbeiro.filter(
+    (r) => r.status === "cancelado" || r.status === "estornado",
+  );
   // Atendimentos cobertos por plano não geram receita.
   const pagantes = validos.filter((r) => r.tipo !== "plano");
   const total = pagantes.reduce((soma, r) => soma + Number(r.valor), 0);
+  // Já recebido online (cartão via MP) e ainda a receber no balcão.
+  const recebidoOnline = validos
+    .filter((r) => r.formaPagamento === "online" && r.pagamentoStatus === "pago")
+    .reduce((soma, r) => soma + Number(r.valor), 0);
+  const aReceber = pagantes
+    .filter((r) => r.pagamentoStatus !== "pago")
+    .reduce((soma, r) => soma + Number(r.valor), 0);
   const taxaCancelamento =
-    rowsBarbeiro.length > 0 ? (cancelados.length / rowsBarbeiro.length) * 100 : 0;
+    rowsBarbeiro.length > 0 ? (encerrados.length / rowsBarbeiro.length) * 100 : 0;
 
   const cards = [
     { label: "Faturamento", valor: formatBRL(total), icon: DollarSign },
+    { label: "Recebido online", valor: formatBRL(recebidoOnline), icon: CreditCard },
+    { label: "A receber", valor: formatBRL(aReceber), icon: Hourglass },
     { label: "Atendimentos", valor: String(validos.length), icon: CalendarCheck },
     { label: "Finalizados", valor: String(finalizados.length), icon: CheckCircle2 },
-    { label: "Taxa de cancelamento", valor: `${taxaCancelamento.toFixed(0)}%`, icon: Ban },
+    { label: "Cancel./estorn.", valor: `${taxaCancelamento.toFixed(0)}%`, icon: Ban },
   ];
 
   const barbeiroAtivo = listaBarbeiros.find((b) => b.id === barbeiroSel);
@@ -90,6 +104,8 @@ export default async function AgendaPage({
     status: r.status,
     tipo: r.tipo,
     valor: r.valor,
+    formaPagamento: r.formaPagamento as "presencial" | "online",
+    pagamentoStatus: r.pagamentoStatus,
     clienteNome: r.clienteNome ?? r.clienteAvulso ?? "Sem cadastro",
     barbeiroId: r.barbeiroId,
     servicoNome: r.servicoNome,
@@ -114,7 +130,7 @@ export default async function AgendaPage({
         </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {cards.map(({ label, valor, icon: Icon }) => (
           <Card key={label} className="p-4">
             <div className="flex items-center justify-between gap-2">

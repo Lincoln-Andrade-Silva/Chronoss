@@ -15,10 +15,12 @@ const iconBtn =
 
 export function ServicosClient({
   servicos,
+  taxaCartao,
   page,
   pageCount,
 }: {
   servicos: Servico[];
+  taxaCartao: number;
   page: number;
   pageCount: number;
 }) {
@@ -123,6 +125,7 @@ export function ServicosClient({
         <ServicoModal
           key={modal.servico?.id ?? "novo"}
           servico={modal.servico}
+          taxaCartao={taxaCartao}
           onClose={() => setModal(null)}
         />
       )}

@@ -1,18 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Star, Trash2, X } from "lucide-react";
-import { ConfirmModal } from "@/components/ui";
+import { Check, RotateCcw, Star, Trash2, X } from "lucide-react";
+import { ConfirmModal, FormError } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatBRL } from "@/lib/format";
 import {
   cancelarAgendamentoAdmin,
+  estornarAgendamentoAdmin,
   excluirAgendamento,
   finalizarAgendamento,
 } from "./actions";
 
-type StatusAg = "agendado" | "finalizado" | "cancelado";
-type TipoAcao = "finalizar" | "cancelar" | "excluir";
+type StatusAg = "agendado" | "finalizado" | "cancelado" | "estornado";
+type TipoAcao = "finalizar" | "cancelar" | "estornar" | "excluir";
+type FormaPagamento = "presencial" | "online";
 
 export interface AgendaItem {
   id: string;
@@ -21,6 +23,8 @@ export interface AgendaItem {
   status: StatusAg;
   tipo: "avulso" | "plano";
   valor: string;
+  formaPagamento: FormaPagamento;
+  pagamentoStatus: string;
   clienteNome: string;
   barbeiroId: string;
   servicoNome: string;
@@ -32,6 +36,8 @@ interface Bloco {
   inicio: number;
   fim: number;
   status: StatusAg;
+  formaPagamento: FormaPagamento;
+  pagamentoStatus: string;
   clienteNome: string;
   temPlano: boolean;
   valorTotal: number;
@@ -80,6 +86,8 @@ function montarBlocos(items: AgendaItem[]): Bloco[] {
         inicio,
         fim,
         status: item.status,
+        formaPagamento: item.formaPagamento,
+        pagamentoStatus: item.pagamentoStatus,
         clienteNome: item.clienteNome,
         temPlano: item.tipo === "plano",
         valorTotal: Number(item.valor),
@@ -138,6 +146,7 @@ const bordaStatus: Record<StatusAg, string> = {
   agendado: "border-line border-l-brand",
   finalizado: "border-line border-l-emerald-500",
   cancelado: "border-red-400/50 border-l-red-400",
+  estornado: "border-amber-400/50 border-l-amber-400",
 };
 
 const acaoBtn =
@@ -146,8 +155,26 @@ const acaoBtn =
 const TEXTOS: Record<TipoAcao, { titulo: string; verbo: string; label: string }> = {
   finalizar: { titulo: "Finalizar atendimento", verbo: "finalizar", label: "Finalizar" },
   cancelar: { titulo: "Cancelar agendamento", verbo: "cancelar", label: "Cancelar" },
+  estornar: { titulo: "Estornar atendimento", verbo: "estornar", label: "Estornar" },
   excluir: { titulo: "Excluir agendamento", verbo: "excluir", label: "Excluir" },
 };
+
+/** Selo do pagamento no card. Null = presencial sem nada a destacar. */
+function seloPagamento(bloco: Bloco): { texto: string; cor: string } | null {
+  if (bloco.pagamentoStatus === "estornado" || bloco.status === "estornado") {
+    return { texto: "Estornado", cor: "text-amber-400" };
+  }
+  if (bloco.pagamentoStatus === "pago") {
+    return { texto: "Pago online", cor: "text-emerald-400" };
+  }
+  if (bloco.formaPagamento === "online" && bloco.pagamentoStatus === "pendente") {
+    return { texto: "Aguardando pgto", cor: "text-amber-400" };
+  }
+  if (!bloco.temPlano && bloco.valorTotal > 0) {
+    return { texto: "A receber", cor: "text-muted2" };
+  }
+  return null;
+}
 
 export function AgendaLista({
   items,
@@ -159,15 +186,20 @@ export function AgendaLista({
   barbeiroFotoUrl?: string | null;
 }) {
   const [acao, setAcao] = useState<{ bloco: Bloco; tipo: TipoAcao } | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function confirmar() {
     if (!acao) return;
     const { bloco, tipo } = acao;
+    setErro(null);
     startTransition(async () => {
-      if (tipo === "finalizar") await finalizarAgendamento(bloco.id);
-      else if (tipo === "cancelar") await cancelarAgendamentoAdmin(bloco.id);
-      else await excluirAgendamento(bloco.id);
+      let res: { error?: string };
+      if (tipo === "finalizar") res = await finalizarAgendamento(bloco.id);
+      else if (tipo === "cancelar") res = await cancelarAgendamentoAdmin(bloco.id);
+      else if (tipo === "estornar") res = await estornarAgendamentoAdmin(bloco.id);
+      else res = await excluirAgendamento(bloco.id);
+      if (res.error) setErro(res.error);
       setAcao(null);
     });
   }
@@ -177,6 +209,7 @@ export function AgendaLista({
   const pendentes = items.filter((i) => i.status === "agendado").length;
   const finalizados = items.filter((i) => i.status === "finalizado").length;
   const cancelados = items.filter((i) => i.status === "cancelado").length;
+  const estornados = items.filter((i) => i.status === "estornado").length;
 
   const blocos = montarBlocos(items);
   const posicionados = posicionar(blocos);
@@ -191,6 +224,7 @@ export function AgendaLista({
 
   return (
     <div className="space-y-3">
+      {erro && <FormError>{erro}</FormError>}
       <div className="flex items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3">
         {barbeiroNome &&
           (barbeiroFotoUrl ? (
@@ -212,6 +246,7 @@ export function AgendaLista({
             <span className="text-brand-light">{pendentes} pendentes</span>
             <span className="text-emerald-400">{finalizados} finalizados</span>
             <span className="text-muted2">{cancelados} cancelados</span>
+            {estornados > 0 && <span className="text-amber-400">{estornados} estornados</span>}
           </div>
         </div>
       </div>
@@ -242,12 +277,20 @@ export function AgendaLista({
               const top = ((bloco.inicio - inicioGrade) / 60) * PX_HORA;
               const altura = Math.max(((bloco.fim - bloco.inicio) / 60) * PX_HORA, 48);
               const multi = bloco.servicos.length > 1;
+              const selo = seloPagamento(bloco);
+              const aguardandoPgto =
+                bloco.formaPagamento === "online" && bloco.pagamentoStatus === "pendente";
+              const podeEstornar =
+                (bloco.pagamentoStatus === "pago" || bloco.status === "finalizado") &&
+                bloco.status !== "estornado" &&
+                bloco.status !== "cancelado";
               return (
                 <div
                   key={bloco.id}
                   className={cn(
-                    "absolute overflow-hidden rounded-lg border border-l-4 bg-surface px-2 py-1.5",
+                    "absolute overflow-hidden rounded-lg border border-l-4 px-2 py-1.5",
                     bordaStatus[bloco.status],
+                    aguardandoPgto ? "bg-amber-500/15" : "bg-surface",
                   )}
                   style={{
                     top: top + 2,
@@ -274,29 +317,45 @@ export function AgendaLista({
                         {hhmm(bloco.inicio)} - {hhmm(bloco.fim)} · {bloco.fim - bloco.inicio}min
                         {multi && <> · Total {formatBRL(bloco.valorTotal)}</>}
                       </p>
+                      {selo && (
+                        <p className={cn("truncate text-[10px] font-semibold", selo.cor)}>
+                          {selo.texto}
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 gap-1">
-                      {bloco.status === "agendado" && (
-                        <>
-                          <button
-                            type="button"
-                            title="Finalizar"
-                            disabled={pending}
-                            onClick={() => setAcao({ bloco, tipo: "finalizar" })}
-                            className={cn(acaoBtn, "hover:border-emerald-500/40 hover:text-emerald-400")}
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            title="Cancelar"
-                            disabled={pending}
-                            onClick={() => setAcao({ bloco, tipo: "cancelar" })}
-                            className={cn(acaoBtn, "hover:border-amber-500/40 hover:text-amber-400")}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </>
+                      {bloco.status === "agendado" && !aguardandoPgto && (
+                        <button
+                          type="button"
+                          title="Finalizar"
+                          disabled={pending}
+                          onClick={() => setAcao({ bloco, tipo: "finalizar" })}
+                          className={cn(acaoBtn, "hover:border-emerald-500/40 hover:text-emerald-400")}
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {bloco.status === "agendado" && bloco.pagamentoStatus !== "pago" && (
+                        <button
+                          type="button"
+                          title="Cancelar"
+                          disabled={pending}
+                          onClick={() => setAcao({ bloco, tipo: "cancelar" })}
+                          className={cn(acaoBtn, "hover:border-amber-500/40 hover:text-amber-400")}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {podeEstornar && (
+                        <button
+                          type="button"
+                          title="Estornar"
+                          disabled={pending}
+                          onClick={() => setAcao({ bloco, tipo: "estornar" })}
+                          className={cn(acaoBtn, "hover:border-amber-500/40 hover:text-amber-400")}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
                       )}
                       <button
                         type="button"

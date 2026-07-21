@@ -24,7 +24,7 @@ import { instanteSlot } from "@/lib/disponibilidade";
 import { formatBRL } from "@/lib/format";
 import { diasAtras, gerarDias, hojeSP, spYmd } from "@/features/relatorios/datas";
 import { PeriodoNav } from "@/features/relatorios/periodo-nav";
-import { GraficoBarras, KpiGrid, Ranking, Secao } from "@/features/relatorios/ui";
+import { GraficoBarras, KpiGrid, Ranking, Secao, Tabela } from "@/features/relatorios/ui";
 import { RankingExpansivel } from "@/features/relatorios/ranking-expansivel";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +47,8 @@ export default async function AdminHome({
         status: agendamentos.status,
         valor: agendamentos.valor,
         tipo: agendamentos.tipo,
+        formaPagamento: agendamentos.formaPagamento,
+        pagamentoStatus: agendamentos.pagamentoStatus,
         clienteId: agendamentos.clienteId,
         barbeiroId: agendamentos.barbeiroId,
         barbeiroNome: barbeiros.nome,
@@ -69,7 +71,12 @@ export default async function AdminHome({
       .innerJoin(produtos, eq(vendasProdutos.produtoId, produtos.id))
       .where(and(gte(vendasProdutos.dataHora, inicio), lt(vendasProdutos.dataHora, fimExclusivo))),
     db
-      .select({ valor: planos.valor, planoNome: planos.nome })
+      .select({
+        valor: planos.valor,
+        planoNome: planos.nome,
+        metodo: assinaturas.metodo,
+        gratuito: assinaturas.gratuito,
+      })
       .from(assinaturas)
       .innerJoin(planos, eq(assinaturas.planoId, planos.id))
       .where(eq(assinaturas.status, "ativo")),
@@ -91,9 +98,42 @@ export default async function AdminHome({
 
   const finalizados = atendimentos.filter((r) => r.status === "finalizado");
   const cancelados = atendimentos.filter((r) => r.status === "cancelado").length;
+  const estornados = atendimentos.filter((r) => r.status === "estornado").length;
   const pendentes = atendimentos.filter((r) => r.status === "agendado").length;
-  const taxaCancelamento = atendimentos.length > 0 ? (cancelados / atendimentos.length) * 100 : 0;
+  const taxaCancelamento =
+    atendimentos.length > 0 ? ((cancelados + estornados) / atendimentos.length) * 100 : 0;
   const clientesUnicos = new Set(finalizados.map((r) => r.clienteId).filter(Boolean)).size;
+
+  // Recebido antecipado (cartão via MP) x ainda a receber no balcão, no período.
+  const recebidoOnline = atendimentos
+    .filter(
+      (r) =>
+        r.formaPagamento === "online" &&
+        r.pagamentoStatus === "pago" &&
+        r.status !== "cancelado" &&
+        r.status !== "estornado",
+    )
+    .reduce((s, r) => s + Number(r.valor), 0);
+  const aReceber = atendimentos
+    .filter(
+      (r) => r.status === "agendado" && r.tipo !== "plano" && r.pagamentoStatus !== "pago",
+    )
+    .reduce((s, r) => s + Number(r.valor), 0);
+
+  // Faturamento por forma de recebimento (serviços finalizados + planos ativos).
+  const servMP = finalizados
+    .filter((r) => r.formaPagamento === "online")
+    .reduce((s, r) => s + Number(r.valor), 0);
+  const servPresencial = finalizados
+    .filter((r) => r.formaPagamento !== "online")
+    .reduce((s, r) => s + Number(r.valor), 0);
+  const planoMP = ativas
+    .filter((a) => a.metodo === "cartao" && !a.gratuito)
+    .reduce((s, a) => s + Number(a.valor), 0);
+  const planoCortesia = ativas.filter((a) => a.gratuito).length;
+  const reembolsos = atendimentos
+    .filter((r) => r.status === "estornado")
+    .reduce((s, r) => s + Number(r.valor), 0);
 
   const fatServicos = finalizados.reduce((s, r) => s + Number(r.valor), 0);
   const fatProdutos = vendas.reduce((s, r) => s + Number(r.total), 0);
@@ -126,7 +166,7 @@ export default async function AdminHome({
   const maxPlano = Math.max(1, ...planosRank.map(([, v]) => v.qtd));
 
   // Status dos atendimentos
-  const maxStatus = Math.max(1, finalizados.length, pendentes, cancelados);
+  const maxStatus = Math.max(1, finalizados.length, pendentes, cancelados, estornados);
 
   // Por profissional
   // Detalhe por profissional (serviços, faturamento e comissão) para os painéis expansíveis
@@ -239,7 +279,10 @@ export default async function AdminHome({
   const maxComposicao = Math.max(1, fatServicos, fatProdutos, recorrente);
 
   const indicadores = [
-    { label: "Taxa de cancelamento", valor: `${taxaCancelamento.toFixed(0)}%` },
+    { label: "Recebido online", valor: formatBRL(recebidoOnline) },
+    { label: "A receber (balcão)", valor: formatBRL(aReceber) },
+    { label: "Reembolsos", valor: formatBRL(reembolsos) },
+    { label: "Cancel./estorno", valor: `${taxaCancelamento.toFixed(0)}%` },
     { label: "Pendentes no período", valor: String(pendentes) },
     { label: "Novas assinaturas", valor: String(novas.length) },
     { label: "Receita recorrente", valor: formatBRL(recorrente) },
@@ -298,6 +341,20 @@ export default async function AdminHome({
           />
         </Secao>
 
+        <Secao titulo="Formas de recebimento">
+          <Tabela
+            cabecalho={["Forma", "Serviços", "Planos", "Total"]}
+            linhas={[
+              ["Mercado Pago", formatBRL(servMP), formatBRL(planoMP), formatBRL(servMP + planoMP)],
+              ["Presencial (balcão)", formatBRL(servPresencial), "—", formatBRL(servPresencial)],
+              ...(planoCortesia > 0
+                ? [["Cortesia (manual)", "—", `${planoCortesia} plano(s)`, "—"]]
+                : []),
+            ]}
+            vazio="Sem recebimentos no período."
+          />
+        </Secao>
+
         <Secao titulo="Indicadores">
           <div className="space-y-2.5">
             {indicadores.map((i) => (
@@ -331,6 +388,7 @@ export default async function AdminHome({
               { nome: "Finalizados", destaque: String(finalizados.length), proporcao: (finalizados.length / maxStatus) * 100 },
               { nome: "Pendentes", destaque: String(pendentes), proporcao: (pendentes / maxStatus) * 100 },
               { nome: "Cancelados", destaque: String(cancelados), proporcao: (cancelados / maxStatus) * 100 },
+              { nome: "Estornados", destaque: String(estornados), proporcao: (estornados / maxStatus) * 100 },
             ]}
           />
         </Secao>

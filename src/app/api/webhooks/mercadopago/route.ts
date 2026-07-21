@@ -9,6 +9,7 @@ import {
   pagamentoRecorrenteFalhou,
   validarWebhook,
 } from "@/lib/mercadopago";
+import { reconciliarPagamentoAgendamento } from "@/features/agendamento/pagamento";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,6 +40,12 @@ export async function POST(req: Request) {
   if (!valido) return NextResponse.json({ error: "assinatura inválida" }, { status: 401 });
 
   try {
+    // Pagamento único de agendamento (Checkout Pro). Reflete aprovação e estorno.
+    if (type === "payment") {
+      await reconciliarPagamentoAgendamento(String(dataId));
+      return NextResponse.json({ ok: true });
+    }
+
     // Cobrança recorrente: se falhou de forma definitiva, cancela e inativa o plano.
     if (type === "subscription_authorized_payment" || type === "authorized_payment") {
       const ap = await getAuthorizedPayment(String(dataId));

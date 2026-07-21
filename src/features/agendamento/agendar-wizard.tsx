@@ -2,12 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, ChevronLeft, Clock, Scissors, Star, Zap } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, Clock, CreditCard, Scissors, Star, Store, Zap } from "lucide-react";
 import { Button, Card, FormError } from "@/components/ui";
 import type { Barbeiro, Servico } from "@/db/schema";
 import { cn } from "@/lib/cn";
 import { formatBRL, formatDuracao } from "@/lib/format";
-import { criarAgendamento, getHorariosDisponiveis, getPrecoAgendamento, type ItemPreco } from "./actions";
+import {
+  criarAgendamento,
+  getHorariosDisponiveis,
+  getPrecoAgendamento,
+  type FormaPagamento,
+  type ItemPreco,
+} from "./actions";
 
 function ymd(date: Date): string {
   return date.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
@@ -54,6 +60,7 @@ export function AgendarWizard({
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
+  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>("presencial");
   const [enviando, startTransition] = useTransition();
   const pularReset = useRef(false);
 
@@ -141,10 +148,19 @@ export function AgendarWizard({
   function confirmar() {
     if (selecionados.length === 0 || !barbeiro || !hora) return;
     setErro(null);
+    // Só cobra online se há valor a pagar na data (plano cobrindo tudo = grátis).
+    const pagarOnline = formaPagamento === "online" && (totalNaData ?? 0) > 0;
     startTransition(async () => {
       const ids = selecionados.map((s) => s.id);
-      const res = await criarAgendamento(barbeiro.id, ids, data, hora);
-      if (res.error) {
+      const res = await criarAgendamento(
+        barbeiro.id,
+        ids,
+        data,
+        hora,
+        pagarOnline ? "online" : "presencial",
+      );
+      // Online redireciona ao checkout do MP; só chega aqui em erro ou pagamento presencial.
+      if (res?.error) {
         setErro(res.error);
         const novos = await getHorariosDisponiveis(barbeiro.id, ids, data);
         setSlots(novos);
@@ -397,12 +413,58 @@ export function AgendarWizard({
             </p>
           )}
 
+          {hora && totalNaData !== null && totalNaData > 0 && (
+            <div>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                Forma de pagamento
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setFormaPagamento("online")}
+                  className={cn(
+                    "flex items-start gap-2.5 rounded-xl border p-3 text-left transition",
+                    formaPagamento === "online"
+                      ? "border-brand bg-brand/5"
+                      : "border-line hover:border-brand/40 hover:bg-surface",
+                  )}
+                >
+                  <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-brand-light" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold">Pagar agora</span>
+                    <span className="block text-xs text-muted">Cartão via Mercado Pago</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormaPagamento("presencial")}
+                  className={cn(
+                    "flex items-start gap-2.5 rounded-xl border p-3 text-left transition",
+                    formaPagamento === "presencial"
+                      ? "border-brand bg-brand/5"
+                      : "border-line hover:border-brand/40 hover:bg-surface",
+                  )}
+                >
+                  <Store className="mt-0.5 h-4 w-4 shrink-0 text-brand-light" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold">Pagar na hora</span>
+                    <span className="block text-xs text-muted">No balcão, no atendimento</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <Button className="w-full" disabled={!hora || enviando} onClick={confirmar}>
             {enviando
               ? "Confirmando..."
-              : totalNaData !== null
-                ? `Confirmar agendamento - ${totalNaData === 0 ? "Grátis" : formatBRL(totalNaData)}`
-                : "Confirmar agendamento"}
+              : totalNaData !== null && totalNaData > 0
+                ? formaPagamento === "online"
+                  ? `Pagar ${formatBRL(totalNaData)} com Mercado Pago`
+                  : `Confirmar agendamento - ${formatBRL(totalNaData)}`
+                : totalNaData === 0
+                  ? "Confirmar agendamento - Grátis"
+                  : "Confirmar agendamento"}
           </Button>
         </div>
       )}

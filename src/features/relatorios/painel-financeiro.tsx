@@ -1,5 +1,5 @@
 import { and, eq, gte, lt } from "drizzle-orm";
-import { DollarSign, Receipt, Repeat, Scissors, ShoppingBag } from "lucide-react";
+import { DollarSign, Receipt, Repeat, Scissors, ShoppingBag, Undo2 } from "lucide-react";
 import { db } from "@/db";
 import { agendamentos, assinaturas, barbeiros, planos, produtos, servicos, vendasProdutos } from "@/db/schema";
 import { formatBRL } from "@/lib/format";
@@ -14,12 +14,13 @@ export async function PainelFinanceiro({
   inicio: Date;
   fimExclusivo: Date;
 }) {
-  const [finalizados, vendas, ativas] = await Promise.all([
+  const [finalizados, vendas, ativas, estornadosRows] = await Promise.all([
     db
       .select({
         dataHora: agendamentos.dataHora,
         valor: agendamentos.valor,
         tipo: agendamentos.tipo,
+        formaPagamento: agendamentos.formaPagamento,
         barbeiroId: agendamentos.barbeiroId,
         barbeiroNome: barbeiros.nome,
         barbeiroFoto: barbeiros.fotoUrl,
@@ -40,10 +41,24 @@ export async function PainelFinanceiro({
       .from(vendasProdutos)
       .where(and(gte(vendasProdutos.dataHora, inicio), lt(vendasProdutos.dataHora, fimExclusivo))),
     db
-      .select({ valor: planos.valor })
+      .select({
+        valor: planos.valor,
+        metodo: assinaturas.metodo,
+        gratuito: assinaturas.gratuito,
+      })
       .from(assinaturas)
       .innerJoin(planos, eq(assinaturas.planoId, planos.id))
       .where(eq(assinaturas.status, "ativo")),
+    db
+      .select({ valor: agendamentos.valor, formaPagamento: agendamentos.formaPagamento })
+      .from(agendamentos)
+      .where(
+        and(
+          eq(agendamentos.status, "estornado"),
+          gte(agendamentos.dataHora, inicio),
+          lt(agendamentos.dataHora, fimExclusivo),
+        ),
+      ),
   ]);
 
   const fatServicos = finalizados.reduce((s, r) => s + Number(r.valor), 0);
@@ -52,6 +67,22 @@ export async function PainelFinanceiro({
   const recorrente = ativas.reduce((s, a) => s + Number(a.valor), 0);
   const pagantes = finalizados.filter((r) => r.tipo !== "plano").length;
   const ticket = pagantes > 0 ? fatServicos / pagantes : 0;
+
+  // Recebimento por forma e reembolsos.
+  const servMP = finalizados
+    .filter((r) => r.formaPagamento === "online")
+    .reduce((s, r) => s + Number(r.valor), 0);
+  const servPresencial = finalizados
+    .filter((r) => r.formaPagamento !== "online")
+    .reduce((s, r) => s + Number(r.valor), 0);
+  const planoMP = ativas
+    .filter((a) => a.metodo === "cartao" && !a.gratuito)
+    .reduce((s, a) => s + Number(a.valor), 0);
+  const planoCortesia = ativas.filter((a) => a.gratuito).length;
+  const reembolsos = estornadosRows.reduce((s, r) => s + Number(r.valor), 0);
+  const reembolsosMP = estornadosRows
+    .filter((r) => r.formaPagamento === "online")
+    .reduce((s, r) => s + Number(r.valor), 0);
 
   const dias = gerarDias(inicio, fimExclusivo);
   const serv = new Map<string, number>(dias.map((d) => [d, 0]));
@@ -102,6 +133,7 @@ export async function PainelFinanceiro({
           { label: "Produtos", valor: formatBRL(fatProdutos), icon: ShoppingBag },
           { label: "Receita recorrente", valor: formatBRL(recorrente), icon: Repeat },
           { label: "Ticket médio", valor: formatBRL(ticket), icon: Receipt },
+          { label: "Reembolsos", valor: formatBRL(reembolsos), icon: Undo2 },
         ]}
       />
 
@@ -129,6 +161,30 @@ export async function PainelFinanceiro({
           <RankingExpansivel itens={barbeirosItens} vazio="Nenhum atendimento no período." />
         </Secao>
       </div>
+
+      <Secao titulo="Formas de recebimento">
+        <Tabela
+          cabecalho={["Forma", "Serviços", "Planos", "Total"]}
+          linhas={[
+            ["Mercado Pago", formatBRL(servMP), formatBRL(planoMP), formatBRL(servMP + planoMP)],
+            ["Presencial (balcão)", formatBRL(servPresencial), "—", formatBRL(servPresencial)],
+            ...(planoCortesia > 0
+              ? [["Cortesia (manual)", "—", `${planoCortesia} plano(s)`, "—"]]
+              : []),
+            ...(reembolsos > 0
+              ? [
+                  [
+                    "Reembolsos",
+                    `-${formatBRL(reembolsos)}`,
+                    "",
+                    `Mercado Pago -${formatBRL(reembolsosMP)}`,
+                  ],
+                ]
+              : []),
+          ]}
+          vazio="Sem recebimentos no período."
+        />
+      </Secao>
 
       <Secao titulo="Faturamento por dia (detalhado)">
         <Tabela

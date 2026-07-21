@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { Button, Field, FormError, Input, Modal, Textarea, Toggle } from "@/components/ui";
 import type { Servico } from "@/db/schema";
+import { formatBRL } from "@/lib/format";
 import { salvarServico, type ServicoFormState } from "./actions";
 
 function SubmitButton({ editando }: { editando: boolean }) {
@@ -17,13 +18,20 @@ function SubmitButton({ editando }: { editando: boolean }) {
 
 export function ServicoModal({
   servico,
+  taxaCartao,
   onClose,
 }: {
   servico: Servico | null;
+  taxaCartao: number;
   onClose: () => void;
 }) {
   const [state, formAction] = useFormState<ServicoFormState, FormData>(salvarServico, {});
   const [ativo, setAtivo] = useState(servico?.ativo ?? true);
+  const [preco, setPreco] = useState(servico?.preco ?? "0");
+
+  const precoNum = Number(String(preco).replace(",", "."));
+  const temPreco = Number.isFinite(precoNum) && precoNum > 0;
+  const liquido = temPreco ? precoNum * (1 - taxaCartao / 100) : 0;
 
   useEffect(() => {
     if (state.ok) onClose();
@@ -53,7 +61,8 @@ export function ServicoModal({
               type="number"
               min={0}
               step="0.01"
-              defaultValue={servico?.preco ?? "0"}
+              value={preco}
+              onChange={(e) => setPreco(e.target.value)}
             />
           </Field>
           <Field label="Duração (min)" htmlFor="s-duracao">
@@ -67,6 +76,14 @@ export function ServicoModal({
             />
           </Field>
         </div>
+        {temPreco && (
+          <p className="-mt-2 text-xs text-muted">
+            No pagamento antecipado (cartão via Mercado Pago) você recebe{" "}
+            <span className="font-semibold text-emerald-400">{formatBRL(liquido)}</span>, já
+            descontada a taxa ({taxaCartao.toString().replace(".", ",")}% = -
+            {formatBRL(precoNum - liquido)}). No balcão, o valor é integral.
+          </p>
+        )}
 
         <Field label="Descrição" htmlFor="s-descricao" hint="(opcional)">
           <Textarea

@@ -17,6 +17,87 @@ export interface Preapproval {
   init_point?: string;
 }
 
+/** Cria uma preferência de pagamento único (Checkout Pro) e devolve o link do checkout. */
+export async function criarPreferencia(input: {
+  titulo: string;
+  valor: number;
+  payerEmail: string;
+  externalReference: string;
+  baseUrl: string;
+}): Promise<{ id: string; initPoint: string }> {
+  const token = await accessToken();
+  const res = await fetch(`${API}/checkout/preferences`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      items: [
+        {
+          title: input.titulo,
+          quantity: 1,
+          unit_price: Number(input.valor.toFixed(2)),
+          currency_id: "BRL",
+        },
+      ],
+      payer: { email: input.payerEmail },
+      external_reference: input.externalReference,
+      back_urls: {
+        success: `${input.baseUrl}/meus-agendamentos`,
+        failure: `${input.baseUrl}/meus-agendamentos`,
+        pending: `${input.baseUrl}/meus-agendamentos`,
+      },
+      auto_return: "approved",
+      notification_url: `${input.baseUrl}/api/webhooks/mercadopago`,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`MP preference: ${JSON.stringify(data)}`);
+  return { id: data.id, initPoint: data.init_point };
+}
+
+export interface Pagamento {
+  id: number;
+  status: string; // approved | pending | in_process | rejected | refunded | cancelled | charged_back
+  external_reference?: string;
+}
+
+/** Consulta um pagamento único (evento type=payment do webhook / retorno do checkout). */
+export async function getPagamento(id: string): Promise<Pagamento> {
+  const token = await accessToken();
+  const res = await fetch(`${API}/v1/payments/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`MP get payment: ${JSON.stringify(data)}`);
+  return data;
+}
+
+/** Estorna (total) um pagamento aprovado. Idempotente pela chave enviada. */
+export async function estornarPagamento(paymentId: string): Promise<void> {
+  const token = await accessToken();
+  const res = await fetch(`${API}/v1/payments/${paymentId}/refunds`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "X-Idempotency-Key": `refund-${paymentId}`,
+    },
+    body: "{}",
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(`MP refund: ${JSON.stringify(data)}`);
+  }
+}
+
+/** Situação do pagamento único traduzida para o domínio do agendamento. */
+export function situacaoPagamento(status: string): "pago" | "estornado" | "pendente" {
+  if (status === "approved") return "pago";
+  if (status === "refunded" || status === "cancelled" || status === "charged_back") {
+    return "estornado";
+  }
+  return "pendente";
+}
+
 /** Cria uma assinatura recorrente (cartão) e devolve o link de checkout do MP. */
 export async function criarPreapproval(input: {
   planoNome: string;
