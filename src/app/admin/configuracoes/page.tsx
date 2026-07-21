@@ -28,6 +28,7 @@ export default async function ConfiguracoesPage({
           publicKey={cfg?.publicKey ?? null}
           webhookSecret={cfg?.webhookSecret ?? null}
           siteUrl={cfg?.siteUrl ?? null}
+          taxaCartao={cfg?.taxaCartao ?? "3.03"}
         />
       </Card>
     );

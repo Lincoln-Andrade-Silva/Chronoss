@@ -1,0 +1,1 @@
+ALTER TABLE "integracoes_pagamento" ADD COLUMN "taxa_cartao" numeric(5, 2) DEFAULT '3.03' NOT NULL;

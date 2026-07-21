@@ -40,14 +40,21 @@ function SubmitButton({ editando }: { editando: boolean }) {
 export function PlanoModal({
   plano,
   servicos,
+  taxaCartao,
   onClose,
 }: {
   plano: PlanoComServicos | null;
   servicos: Servico[];
+  taxaCartao: number;
   onClose: () => void;
 }) {
   const [state, formAction] = useFormState<PlanoFormState, FormData>(salvarPlano, {});
   const [ativo, setAtivo] = useState(plano?.ativo ?? true);
+  const [valor, setValor] = useState(plano?.valor ?? "0");
+
+  const valorNum = Number(String(valor).replace(",", "."));
+  const temValor = Number.isFinite(valorNum) && valorNum > 0;
+  const liquido = temValor ? valorNum * (1 - taxaCartao / 100) : 0;
   // Map servicoId -> limite (string). Presença = incluso. "" = ilimitado.
   const [selecionados, setSelecionados] = useState<Map<string, string>>(
     new Map(plano?.servicos.map((s) => [s.servicoId, s.limite?.toString() ?? ""]) ?? []),
@@ -114,8 +121,17 @@ export function PlanoModal({
             type="number"
             min={0}
             step="0.01"
-            defaultValue={plano?.valor ?? "0"}
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
           />
+          {temValor && (
+            <p className="mt-1.5 text-xs text-muted">
+              Você recebe{" "}
+              <span className="font-semibold text-emerald-400">{formatBRL(liquido)}</span> /mês por
+              assinante, já descontada a taxa do cartão ({taxaCartao.toString().replace(".", ",")}%
+              = -{formatBRL(valorNum - liquido)}).
+            </p>
+          )}
         </Field>
 
         <div>

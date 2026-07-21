@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { planoServicos, planos, produtos, profiles, servicos } from "@/db/schema";
 import { PageHeader, UrlTabBar, type TabItem } from "@/components/ui";
 import { getCurrentProfile } from "@/lib/auth";
+import { getIntegracaoPagamento } from "@/lib/pagamento";
 import { PAGE_SIZE, offsetDaPagina, parsePagina, totalPaginas } from "@/lib/pagination";
 import { ServicosClient } from "@/features/servicos/servicos-client";
 import { ProdutosClient } from "@/features/produtos/produtos-client";
@@ -52,10 +53,11 @@ export default async function CadastrosPage({
     if (status === "inativos") cond.push(eq(planos.ativo, false));
     const where = cond.length ? and(...cond) : undefined;
 
-    const [total, listaPlanos, listaServicos] = await Promise.all([
+    const [total, listaPlanos, listaServicos, cfgPagamento] = await Promise.all([
       db.select({ n: count() }).from(planos).where(where),
       db.select().from(planos).where(where).orderBy(asc(planos.nome)).limit(PAGE_SIZE).offset(offset),
       db.select().from(servicos).where(eq(servicos.ativo, true)).orderBy(asc(servicos.nome)),
+      getIntegracaoPagamento(),
     ]);
 
     const ids = listaPlanos.map((p) => p.id);
@@ -78,6 +80,7 @@ export default async function CadastrosPage({
       <PlanosClient
         planos={planosCompletos}
         servicos={listaServicos}
+        taxaCartao={Number(cfgPagamento?.taxaCartao ?? "3.03")}
         page={pagina}
         pageCount={totalPaginas(total[0]?.n ?? 0)}
       />

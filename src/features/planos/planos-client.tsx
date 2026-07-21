@@ -23,11 +23,13 @@ const iconBtn =
 export function PlanosClient({
   planos,
   servicos,
+  taxaCartao,
   page,
   pageCount,
 }: {
   planos: PlanoComServicos[];
   servicos: Servico[];
+  taxaCartao: number;
   page: number;
   pageCount: number;
 }) {
@@ -141,6 +143,7 @@ export function PlanosClient({
           key={modal.plano?.id ?? "novo"}
           plano={modal.plano}
           servicos={servicos}
+          taxaCartao={taxaCartao}
           onClose={() => setModal(null)}
         />
       )}

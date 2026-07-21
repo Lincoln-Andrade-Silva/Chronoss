@@ -21,13 +21,27 @@ export async function salvarIntegracaoPagamento(
   const webhookSecret = String(formData.get("webhookSecret") ?? "").trim() || null;
   const siteUrl = String(formData.get("siteUrl") ?? "").trim().replace(/\/$/, "") || null;
 
+  const taxaBruta = Number(String(formData.get("taxaCartao") ?? "").replace(",", "."));
+  if (!Number.isFinite(taxaBruta) || taxaBruta < 0 || taxaBruta > 100) {
+    return { error: "Taxa do cartão inválida. Informe um valor entre 0 e 100." };
+  }
+  const taxaCartao = taxaBruta.toFixed(2);
+
   try {
     await db
       .insert(integracoesPagamento)
-      .values({ id: 1, provedor: "mercadopago", accessToken, publicKey, webhookSecret, siteUrl })
+      .values({
+        id: 1,
+        provedor: "mercadopago",
+        accessToken,
+        publicKey,
+        webhookSecret,
+        siteUrl,
+        taxaCartao,
+      })
       .onConflictDoUpdate({
         target: integracoesPagamento.id,
-        set: { accessToken, publicKey, webhookSecret, siteUrl, atualizadoEm: new Date() },
+        set: { accessToken, publicKey, webhookSecret, siteUrl, taxaCartao, atualizadoEm: new Date() },
       });
   } catch (err) {
     console.error("Falha ao salvar integração de pagamento:", err);
