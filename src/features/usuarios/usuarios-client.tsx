@@ -104,7 +104,7 @@ export function UsuariosClient({
             {formatFrequencia(row.original.frequenciaDias)}
           </span>
         ) : (
-          <span className="text-muted2">—</span>
+          <span className="text-muted2">-</span>
         ),
     },
     {
@@ -116,7 +116,7 @@ export function UsuariosClient({
             {formatRecencia(row.original.diasSemRetornar)}
           </span>
         ) : (
-          <span className="text-muted2">—</span>
+          <span className="text-muted2">-</span>
         ),
     },
     {

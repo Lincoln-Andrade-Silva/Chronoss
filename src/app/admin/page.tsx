@@ -384,9 +384,9 @@ export default async function AdminHome({
             cabecalho={["Forma", "Serviços", "Planos", "Total"]}
             linhas={[
               ["Mercado Pago", formatBRL(servMP), formatBRL(planoMP), formatBRL(servMP + planoMP)],
-              ["Presencial (balcão)", formatBRL(servPresencial), "—", formatBRL(servPresencial)],
+              ["Presencial (balcão)", formatBRL(servPresencial), "-", formatBRL(servPresencial)],
               ...(planoCortesia > 0
-                ? [["Cortesia (manual)", "—", `${planoCortesia} plano(s)`, "—"]]
+                ? [["Cortesia (manual)", "-", `${planoCortesia} plano(s)`, "-"]]
                 : []),
             ]}
             vazio="Sem recebimentos no período."

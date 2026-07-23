@@ -87,7 +87,7 @@ export function MovimentacoesClient({ movimentacoes }: { movimentacoes: Moviment
                   m.tipo === "entrada" ? "text-emerald-400" : "text-red-400",
                 )}
               >
-                {m.tipo === "entrada" ? "+" : "−"} {formatBRL(m.valor)}
+                {m.tipo === "entrada" ? "+" : "-"} {formatBRL(m.valor)}
               </span>
               <div className="flex shrink-0 gap-1">
                 <button

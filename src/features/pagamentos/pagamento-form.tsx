@@ -41,7 +41,7 @@ export function PagamentoForm({
         <div className="text-sm text-muted">
           Credenciais do <span className="font-semibold text-ink">Mercado Pago</span> usadas para
           cobrar as assinaturas por cartão. Pegue em Suas integrações → sua aplicação →
-          Credenciais. O Access Token é secreto — não compartilhe.
+          Credenciais. O Access Token é secreto - não compartilhe.
         </div>
       </div>
 
@@ -55,7 +55,7 @@ export function PagamentoForm({
           placeholder="https://seudominio.com"
         />
         <p className="mt-1 text-xs text-muted2">
-          URL pública usada no checkout e no webhook. O Mercado Pago não aceita localhost — em
+          URL pública usada no checkout e no webhook. O Mercado Pago não aceita localhost - em
           produção use seu domínio; para testar local, um túnel (ex: ngrok).
         </p>
       </Field>
@@ -111,7 +111,7 @@ export function PagamentoForm({
         />
         <p className="mt-1 text-xs text-muted2">
           Usado só em produção para validar as notificações do Mercado Pago. Em teste/local pode
-          deixar vazio — a validação é ignorada.
+          deixar vazio - a validação é ignorada.
         </p>
       </Field>
 
