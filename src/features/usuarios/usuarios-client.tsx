@@ -2,11 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Pencil, Plus, Power, PowerOff, Trash2 } from "lucide-react";
+import { Ban, History, Pencil, Plus, Power, PowerOff, ShieldCheck, Trash2 } from "lucide-react";
 import { Badge, Button, ConfirmModal, DataTableServer, UrlSelect } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { alternarStatusUsuario, excluirUsuario } from "./actions";
+import { estadoBloqueio } from "@/lib/bloqueio";
+import { alternarStatusUsuario, desbloquearUsuario, excluirUsuario } from "./actions";
 import { UsuarioModal } from "./usuario-modal";
+import { BloqueioModal } from "./bloqueio-modal";
+import { HistoricoModal } from "./historico-modal";
 
 export interface UsuarioRow {
   id: string;
@@ -15,6 +18,17 @@ export interface UsuarioRow {
   telefone: string | null;
   tipo: "admin" | "cliente";
   status: "ativo" | "inativo";
+  bloqueadoEm: string | null;
+  bloqueioDias: number | null;
+  bloqueioMotivo: string | null;
+}
+
+function bloqueioDaRow(u: UsuarioRow) {
+  return estadoBloqueio({
+    bloqueadoEm: u.bloqueadoEm ? new Date(u.bloqueadoEm) : null,
+    bloqueioDias: u.bloqueioDias,
+    bloqueioMotivo: u.bloqueioMotivo,
+  });
 }
 
 const iconBtn =
@@ -33,11 +47,23 @@ export function UsuariosClient({
 }) {
   const [modal, setModal] = useState<{ usuario: UsuarioRow | null } | null>(null);
   const [excluir, setExcluir] = useState<UsuarioRow | null>(null);
+  const [bloquear, setBloquear] = useState<UsuarioRow | null>(null);
+  const [desbloquear, setDesbloquear] = useState<UsuarioRow | null>(null);
+  const [historico, setHistorico] = useState<UsuarioRow | null>(null);
   const [pending, startTransition] = useTransition();
 
   function toggleStatus(u: UsuarioRow) {
     startTransition(() => {
       void alternarStatusUsuario(u.id, u.status === "ativo" ? "inativo" : "ativo");
+    });
+  }
+
+  function confirmarDesbloqueio() {
+    if (!desbloquear) return;
+    const id = desbloquear.id;
+    startTransition(async () => {
+      await desbloquearUsuario(id);
+      setDesbloquear(null);
     });
   }
 
@@ -79,12 +105,23 @@ export function UsuariosClient({
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) =>
-        row.original.status === "ativo" ? (
-          <Badge tone="success">Ativo</Badge>
-        ) : (
-          <Badge tone="muted">Inativo</Badge>
-        ),
+      cell: ({ row }) => {
+        const bloqueio = bloqueioDaRow(row.original);
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {row.original.status === "ativo" ? (
+              <Badge tone="success">Ativo</Badge>
+            ) : (
+              <Badge tone="muted">Inativo</Badge>
+            )}
+            {bloqueio.ativo && (
+              <Badge tone="danger">
+                {bloqueio.ate ? `Bloqueado até ${bloqueio.ate.toLocaleDateString("pt-BR")}` : "Bloqueado"}
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       id: "acoes",
@@ -92,11 +129,43 @@ export function UsuariosClient({
       cell: ({ row }) => {
         const u = row.original;
         const ehVoce = u.id === usuarioAtualId;
+        const bloqueado = bloqueioDaRow(u).ativo;
         return (
           <div className="flex justify-end gap-1">
             <button type="button" title="Editar" onClick={() => setModal({ usuario: u })} className={iconBtn}>
               <Pencil className="h-4 w-4" />
             </button>
+            {u.tipo === "cliente" && (
+              <button
+                type="button"
+                title="Histórico de bloqueios"
+                onClick={() => setHistorico(u)}
+                className={iconBtn}
+              >
+                <History className="h-4 w-4" />
+              </button>
+            )}
+            {u.tipo === "cliente" &&
+              !ehVoce &&
+              (bloqueado ? (
+                <button
+                  type="button"
+                  title="Desbloquear"
+                  onClick={() => setDesbloquear(u)}
+                  className={cn(iconBtn, "hover:text-emerald-400")}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  title="Bloquear"
+                  onClick={() => setBloquear(u)}
+                  className={cn(iconBtn, "hover:text-red-400")}
+                >
+                  <Ban className="h-4 w-4" />
+                </button>
+              ))}
             <button
               type="button"
               title={ehVoce ? "Você não pode inativar a si mesmo" : u.status === "ativo" ? "Inativar" : "Ativar"}
@@ -160,6 +229,37 @@ export function UsuariosClient({
           onClose={() => setModal(null)}
         />
       )}
+
+      {bloquear && (
+        <BloqueioModal
+          key={bloquear.id}
+          usuario={bloquear}
+          onClose={() => setBloquear(null)}
+        />
+      )}
+
+      {historico && (
+        <HistoricoModal
+          key={historico.id}
+          usuario={historico}
+          onClose={() => setHistorico(null)}
+        />
+      )}
+
+      <ConfirmModal
+        open={!!desbloquear}
+        onClose={() => setDesbloquear(null)}
+        onConfirm={confirmarDesbloqueio}
+        loading={pending}
+        title="Desbloquear usuário"
+        confirmLabel="Desbloquear"
+        message={
+          <>
+            Remover o bloqueio de <strong className="text-ink">{desbloquear?.nome}</strong>? Ele
+            volta a poder agendar serviços e contratar planos.
+          </>
+        }
+      />
 
       <ConfirmModal
         open={!!excluir}

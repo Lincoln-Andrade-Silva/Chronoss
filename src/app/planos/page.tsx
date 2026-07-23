@@ -8,6 +8,7 @@ import { Card } from "@/components/ui";
 import { getCurrentProfile } from "@/lib/auth";
 import { formatBRL } from "@/lib/format";
 import { ClienteHeader } from "@/features/cliente/cliente-header";
+import { BloqueioBanner } from "@/features/cliente/bloqueio-banner";
 import { AssinarButton } from "@/features/planos/assinar-button";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,8 @@ export default async function PlanosPage() {
       <ClienteHeader nomeUsuario={profile.nome} />
       <h1 className="mb-1 text-2xl font-extrabold tracking-tight">Planos</h1>
       <p className="mb-4 text-sm text-muted">Assine e economize nos seus atendimentos.</p>
+
+      <BloqueioBanner entrada={profile} />
 
       <div className="mb-6 flex items-start gap-2 rounded-lg border border-brand/30 bg-brand/10 p-3">
         <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-brand-light" />

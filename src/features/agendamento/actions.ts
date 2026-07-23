@@ -6,6 +6,7 @@ import { and, eq, gte, inArray, lt, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { agendamentos, expediente, servicos } from "@/db/schema";
 import { getCurrentProfile } from "@/lib/auth";
+import { estadoBloqueio, mensagemBloqueio } from "@/lib/bloqueio";
 import { getEstabelecimentoInfo } from "@/lib/estabelecimento";
 import { getBaseUrl } from "@/lib/pagamento";
 import { criarPreferencia } from "@/lib/mercadopago";
@@ -143,6 +144,9 @@ export async function criarAgendamento(
   formaPagamento: FormaPagamento = "presencial",
 ): Promise<CriarAgendamentoResult> {
   const profile = await getCurrentProfile();
+
+  const bloqueio = estadoBloqueio(profile);
+  if (bloqueio.ativo) return { error: mensagemBloqueio(bloqueio) };
 
   if (servicoIds.length === 0) return { error: "Selecione ao menos um serviço." };
   const servs = await db.select().from(servicos).where(inArray(servicos.id, servicoIds));

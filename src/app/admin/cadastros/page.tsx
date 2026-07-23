@@ -102,6 +102,9 @@ export default async function CadastrosPage({
           telefone: profiles.telefone,
           tipo: profiles.tipo,
           status: profiles.status,
+          bloqueadoEm: profiles.bloqueadoEm,
+          bloqueioDias: profiles.bloqueioDias,
+          bloqueioMotivo: profiles.bloqueioMotivo,
         })
         .from(profiles)
         .where(where)
@@ -112,7 +115,10 @@ export default async function CadastrosPage({
     ]);
     conteudo = (
       <UsuariosClient
-        usuarios={rows}
+        usuarios={rows.map((u) => ({
+          ...u,
+          bloqueadoEm: u.bloqueadoEm ? u.bloqueadoEm.toISOString() : null,
+        }))}
         usuarioAtualId={atual.id}
         page={pagina}
         pageCount={totalPaginas(total[0]?.n ?? 0)}

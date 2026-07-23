@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { assinaturas, planos } from "@/db/schema";
 import { getCurrentProfile } from "@/lib/auth";
+import { estadoBloqueio, mensagemBloqueio } from "@/lib/bloqueio";
 import { getBaseUrl } from "@/lib/pagamento";
 import { cancelarPreapproval, criarPreapproval } from "@/lib/mercadopago";
 
@@ -16,6 +17,9 @@ export interface AssinarResult {
 /** Inicia a compra do plano: cria a assinatura recorrente no MP e redireciona ao checkout. */
 export async function assinarPlano(planoId: string): Promise<AssinarResult> {
   const profile = await getCurrentProfile();
+
+  const bloqueio = estadoBloqueio(profile);
+  if (bloqueio.ativo) return { error: mensagemBloqueio(bloqueio) };
 
   const [plano] = await db.select().from(planos).where(eq(planos.id, planoId));
   if (!plano || !plano.ativo) return { error: "Plano indisponível." };
