@@ -40,10 +40,11 @@ export function mediaFrequenciaGeral(medias: Map<string, number>): number | null
   return soma / medias.size;
 }
 
-/** Rótulo curto: "a cada N dias" ou "—" quando indeterminado. */
+/** Rótulo curto: "a cada N dias" ou "—" quando indeterminado ou arredonda para 0 dias. */
 export function formatFrequencia(dias: number | null | undefined): string {
   if (dias == null) return "—";
   const n = Math.round(dias);
+  if (n === 0) return "—";
   return `a cada ${n} ${n === 1 ? "dia" : "dias"}`;
 }
 
