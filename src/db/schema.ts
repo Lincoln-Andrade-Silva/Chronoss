@@ -23,12 +23,33 @@ export const profiles = pgTable("profiles", {
   telefone: text("telefone"),
   tipo: tipoUsuario("tipo").notNull().default("cliente"),
   status: statusUsuario("status").notNull().default("ativo"),
+  // Bloqueio: impede agendar/assinar (mas não o login). Null = sem bloqueio.
+  // `bloqueioDias` null enquanto bloqueado = permanente; passado o prazo, expira sozinho.
+  bloqueadoEm: timestamp("bloqueado_em", { withTimezone: true }),
+  bloqueioDias: integer("bloqueio_dias"),
+  bloqueioMotivo: text("bloqueio_motivo"),
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type Profile = typeof profiles.$inferSelect;
 export type NovoProfile = typeof profiles.$inferInsert;
+
+// Histórico de bloqueios: um registro por episódio. As colunas de estado atual em
+// `profiles` refletem sempre o último episódio ativo (enforcement rápido); esta tabela
+// guarda a trilha completa. `desbloqueadoEm` null = ainda vigente.
+export const bloqueios = pgTable("bloqueios", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  usuarioId: uuid("usuario_id").notNull(),
+  motivo: text("motivo").notNull(),
+  dias: integer("dias"),
+  bloqueadoEm: timestamp("bloqueado_em", { withTimezone: true }).notNull().defaultNow(),
+  desbloqueadoEm: timestamp("desbloqueado_em", { withTimezone: true }),
+  criadoPorId: uuid("criado_por_id"),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Bloqueio = typeof bloqueios.$inferSelect;
 
 // Horário de atendimento por dia da semana (0 = domingo ... 6 = sábado).
 export interface HorarioDia {

@@ -1,12 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { db } from "@/db";
-import { profiles } from "@/db/schema";
+import { bloqueios, profiles } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
+import { estadoBloqueio } from "@/lib/bloqueio";
 import { getServiceRoleKey, getSupabaseUrl } from "@/lib/supabase/config";
 
 export interface UsuarioFormState {
@@ -139,6 +141,136 @@ export async function alternarStatusUsuario(
     .set({ status, atualizadoEm: new Date() })
     .where(eq(profiles.id, id));
   revalidatePath("/admin/cadastros");
+}
+
+const bloqueioSchema = z.object({
+  motivo: z.string().trim().min(3, "Informe o motivo do bloqueio."),
+  dias: z
+    .union([z.coerce.number().int().min(1, "Dias deve ser um número inteiro maior que zero."), z.null()])
+    .optional(),
+});
+
+export async function bloquearUsuario(
+  id: string,
+  motivo: string,
+  dias: number | null,
+): Promise<UsuarioFormState> {
+  const admin = await requireAdmin();
+  if (id === admin.id) return { error: "Você não pode bloquear a si mesmo." };
+
+  const parsed = bloqueioSchema.safeParse({ motivo, dias: dias ?? null });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+
+  const agora = new Date();
+  const diasFinal = parsed.data.dias ?? null;
+
+  try {
+    await db.transaction(async (tx) => {
+      // Encerra qualquer episódio ainda aberto antes de abrir o novo.
+      await tx
+        .update(bloqueios)
+        .set({ desbloqueadoEm: agora })
+        .where(and(eq(bloqueios.usuarioId, id), isNull(bloqueios.desbloqueadoEm)));
+      await tx.insert(bloqueios).values({
+        usuarioId: id,
+        motivo: parsed.data.motivo,
+        dias: diasFinal,
+        bloqueadoEm: agora,
+        criadoPorId: admin.id,
+      });
+      await tx
+        .update(profiles)
+        .set({
+          bloqueadoEm: agora,
+          bloqueioDias: diasFinal,
+          bloqueioMotivo: parsed.data.motivo,
+          atualizadoEm: agora,
+        })
+        .where(eq(profiles.id, id));
+    });
+  } catch (err) {
+    console.error("Falha ao bloquear usuário:", err);
+    return { error: "Não foi possível bloquear. Tente novamente." };
+  }
+
+  revalidatePath("/admin/cadastros");
+  return { ok: true };
+}
+
+export async function desbloquearUsuario(id: string): Promise<void> {
+  await requireAdmin();
+  const agora = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(bloqueios)
+      .set({ desbloqueadoEm: agora })
+      .where(and(eq(bloqueios.usuarioId, id), isNull(bloqueios.desbloqueadoEm)));
+    await tx
+      .update(profiles)
+      .set({ bloqueadoEm: null, bloqueioDias: null, bloqueioMotivo: null, atualizadoEm: agora })
+      .where(eq(profiles.id, id));
+  });
+  revalidatePath("/admin/cadastros");
+}
+
+export type BloqueioStatus = "ativo" | "expirado" | "revogado";
+
+export interface BloqueioHistoricoItem {
+  id: string;
+  motivo: string;
+  bloqueadoEm: string;
+  fim: string | null;
+  status: BloqueioStatus;
+  criadoPorNome: string | null;
+}
+
+/** Trilha de bloqueios de um usuário, mais recente primeiro. */
+export async function historicoBloqueios(usuarioId: string): Promise<BloqueioHistoricoItem[]> {
+  await requireAdmin();
+
+  const autor = alias(profiles, "autor");
+  const linhas = await db
+    .select({
+      id: bloqueios.id,
+      motivo: bloqueios.motivo,
+      dias: bloqueios.dias,
+      bloqueadoEm: bloqueios.bloqueadoEm,
+      desbloqueadoEm: bloqueios.desbloqueadoEm,
+      criadoPorNome: autor.nome,
+    })
+    .from(bloqueios)
+    .leftJoin(autor, eq(bloqueios.criadoPorId, autor.id))
+    .where(eq(bloqueios.usuarioId, usuarioId))
+    .orderBy(desc(bloqueios.bloqueadoEm));
+
+  return linhas.map((l) => {
+    const vigente = estadoBloqueio({
+      bloqueadoEm: l.bloqueadoEm,
+      bloqueioDias: l.dias,
+      bloqueioMotivo: l.motivo,
+    });
+    let status: BloqueioStatus;
+    let fim: Date | null;
+    if (l.desbloqueadoEm) {
+      status = "revogado";
+      fim = l.desbloqueadoEm;
+    } else if (vigente.ativo) {
+      status = "ativo";
+      fim = vigente.ate;
+    } else {
+      status = "expirado";
+      fim = vigente.ate; // estadoBloqueio zera `ate` ao expirar; recalcula abaixo se houver prazo
+      if (l.dias != null) fim = new Date(l.bloqueadoEm.getTime() + l.dias * 24 * 60 * 60 * 1000);
+    }
+    return {
+      id: l.id,
+      motivo: l.motivo,
+      bloqueadoEm: l.bloqueadoEm.toISOString(),
+      fim: fim ? fim.toISOString() : null,
+      status,
+      criadoPorNome: l.criadoPorNome ?? null,
+    };
+  });
 }
 
 export async function excluirUsuario(id: string): Promise<void> {
