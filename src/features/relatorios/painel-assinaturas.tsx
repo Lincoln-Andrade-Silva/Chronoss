@@ -60,15 +60,10 @@ export async function PainelAssinaturas({
     <div className="space-y-6">
       <KpiGrid
         cards={[
-          {
-            label: "Assinaturas ativas",
-            valor: String(ativas.length),
-            icon: CreditCard,
-            sub: `${pagantes.length} pagantes · ${cortesia.length} cortesia`,
-          },
+          { label: "Assinaturas ativas", valor: String(ativas.length), icon: CreditCard },
+          { label: "Cortesia (ativas)", valor: String(cortesia.length), icon: Gift },
           { label: "Receita recorrente", valor: formatBRL(recorrente), icon: Repeat },
           { label: "Ticket médio", valor: formatBRL(ticket), icon: Receipt },
-          { label: "Cortesia (ativas)", valor: String(cortesia.length), icon: Gift },
           { label: "Novas no período", valor: String(novas.length), icon: UserPlus },
           { label: "Inativas", valor: String(inativas.length), icon: UserMinus },
         ]}

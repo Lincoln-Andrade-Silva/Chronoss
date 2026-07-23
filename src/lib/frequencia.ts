@@ -40,11 +40,11 @@ export function mediaFrequenciaGeral(medias: Map<string, number>): number | null
   return soma / medias.size;
 }
 
-/** Rótulo curto: "a cada N dias" ou "—" quando indeterminado ou arredonda para 0 dias. */
+/** Rótulo curto: "a cada N dias" ou "-" quando indeterminado ou arredonda para 0 dias. */
 export function formatFrequencia(dias: number | null | undefined): string {
-  if (dias == null) return "—";
+  if (dias == null) return "-";
   const n = Math.round(dias);
-  if (n === 0) return "—";
+  if (n === 0) return "-";
   return `a cada ${n} ${n === 1 ? "dia" : "dias"}`;
 }
 
@@ -65,9 +65,8 @@ export function ultimaAtividadePorCliente(
   return ultima;
 }
 
-/** Rótulo de recência: "hoje", "N dias" ou "—" quando nunca houve atividade. */
+/** Rótulo de recência: "N dias" ou "-" quando é hoje (0 dias) ou nunca houve atividade. */
 export function formatRecencia(dias: number | null | undefined): string {
-  if (dias == null) return "—";
-  if (dias === 0) return "hoje";
+  if (dias == null || dias === 0) return "-";
   return `${dias} ${dias === 1 ? "dia" : "dias"}`;
 }
