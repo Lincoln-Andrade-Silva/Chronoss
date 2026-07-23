@@ -669,6 +669,24 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "bloqueado_em": {
+          "name": "bloqueado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bloqueio_dias": {
+          "name": "bloqueio_dias",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bloqueio_motivo": {
+          "name": "bloqueio_motivo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -856,6 +874,70 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "criado_por_id": {
+          "name": "criado_por_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bloqueios": {
+      "name": "bloqueios",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "usuario_id": {
+          "name": "usuario_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "motivo": {
+          "name": "motivo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dias": {
+          "name": "dias",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bloqueado_em": {
+          "name": "bloqueado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "desbloqueado_em": {
+          "name": "desbloqueado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "criado_por_id": {
           "name": "criado_por_id",
